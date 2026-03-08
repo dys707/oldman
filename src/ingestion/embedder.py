@@ -20,40 +20,42 @@ class DocumentEmbedder:
     """文档向量化处理器"""
 
     def __init__(self,
-                 model_name: str = "shibing624/text2vec-base-chinese",
+                 model_name_or_path: str = "./models/text2vec-base-chinese",
                  device: Optional[str] = None,
-                 batch_size: int = 32):
+                 batch_size: int = 32,
+                 local_files_only: bool = True):  # 新增参数
         """
         初始化向量化器
 
         Args:
-            model_name: 使用的嵌入模型名称
-            device: 计算设备（cuda/cpu）
+            model_name_or_path: 模型名称或本地路径
+            device: 计算设备
             batch_size: 批处理大小
+            local_files_only: 是否仅使用本地文件（离线模式）
         """
-        self.model_name = model_name
+        if local_files_only:
+            # 强制离线模式，防止联网检查
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            os.environ["HF_HUB_OFFLINE"] = "1"
+
+        self.model_name = model_name_or_path
         self.batch_size = batch_size
 
-        # 自动选择设备
         if device is None:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device = device
 
         print(f"使用设备: {self.device}")
-        print(f"加载模型: {model_name}")
+        print(f"加载模型: {model_name_or_path}")
 
-        # 加载模型
         try:
-            self.model = SentenceTransformer(model_name)
+            self.model = SentenceTransformer(model_name_or_path)
             self.model.to(self.device)
             print(f"模型加载成功，向量维度: {self.model.get_sentence_embedding_dimension()}")
         except Exception as e:
             print(f"模型加载失败: {str(e)}")
-            print("尝试使用备用模型...")
-            # 备用模型
-            self.model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-            self.model.to(self.device)
+            raise
 
     def embed_texts(self, texts: List[str]) -> np.ndarray:
         """

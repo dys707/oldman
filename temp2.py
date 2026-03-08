@@ -3,7 +3,7 @@ from src.ingestion import DocumentEmbedder, VectorStore,DocumentChunker # 创建
 
 # 1. 加载JSON文件中的文本块
 chunker = DocumentChunker()  # 创建实例
-chunks = chunker.load_chunks("data/processed/chunks_20260304_222803.json")
+chunks = chunker.load_chunks("data/processed/chunks_20260305_171814.json")
 
 # 2. 生成向量（把文字变成数字）
 embedder = DocumentEmbedder()

@@ -51,7 +51,7 @@ class VectorStore:
         if embedding_function is None:
             # 使用默认的句子转换器嵌入函数
             self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-                model_name="shibing624/text2vec-base-chinese"
+                model_name="./models/text2vec-base-chinese"
             )
         else:
             self.embedding_function = embedding_function

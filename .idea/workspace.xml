@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="31393808-0a7e-4ec7-bda4-113a16259322" name="更改" comment="资料向量化">
+      <change afterPath="$PROJECT_DIR$/.env" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/psychology_rag.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/script/init_db.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/script/test_retrieval.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/_init_.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/app/_init_.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/app/main.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/app/qa_interface.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/app/utils.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/retrieval/_init_.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/retrieval/reranker.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/retrieval/searcher.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/test2.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/temp2.py" beforeDir="false" afterPath="$PROJECT_DIR$/temp2.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="39Cq6ASdrZkpGdriLbJIp7epNND" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.__init__.executor": "Run",
+    "Python._init_.executor": "Run",
+    "Python.chunker.executor": "Run",
+    "Python.despacio.executor": "Run",
+    "Python.init_db.executor": "Run",
+    "Python.main.executor": "Run",
+    "Python.process.executor": "Run",
+    "Python.rag_assistant.executor": "Run",
+    "Python.temp1.executor": "Run",
+    "Python.temp2.executor": "Run",
+    "Python.test.executor": "Run",
+    "Python.test2.executor": "Run",
+    "Python.test_retrieval.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "D:/codeFiles/python/psychology_rag"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-9f8e2b94138c-36ea0e71a18c-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-251.26094.141" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="31393808-0a7e-4ec7-bda4-113a16259322" name="更改" comment="" />
+      <created>1770210222235</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1770210222235</updated>
+    </task>
+    <task id="LOCAL-00001" summary="资料向量化">
+      <option name="closed" value="true" />
+      <created>1772636460279</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1772636460279</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
+    <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="资料向量化" />
+    <option name="LAST_COMMIT_MESSAGE" value="资料向量化" />
+  </component>
+</project>
