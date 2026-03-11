@@ -4,11 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="31393808-0a7e-4ec7-bda4-113a16259322" name="更改" comment="自行修改start">
+    <list default="true" id="31393808-0a7e-4ec7-bda4-113a16259322" name="更改" comment="能跑通">
+      <change afterPath="$PROJECT_DIR$/.evn.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ingestion/memory_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ingestion/memory_manager.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test.py" beforeDir="false" afterPath="$PROJECT_DIR$/test.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test2.py" beforeDir="false" afterPath="$PROJECT_DIR$/test2.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -26,6 +25,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "dys707"
+  }
+}]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/dys707/oldman.git",
+    "accountId": "7037ef6b-3eae-4362-b517-7c7257ade88f"
+  }
+}]]></component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 2
 }</component>
@@ -103,14 +114,23 @@
       <option name="project" value="LOCAL" />
       <updated>1773210011938</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="能跑通">
+      <option name="closed" value="true" />
+      <created>1773240394996</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1773240394996</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="资料向量化" />
     <MESSAGE value="&#10;框架没有问题，VPN有问题" />
     <MESSAGE value="自行修改start" />
-    <option name="LAST_COMMIT_MESSAGE" value="自行修改start" />
+    <MESSAGE value="能跑通" />
+    <option name="LAST_COMMIT_MESSAGE" value="能跑通" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

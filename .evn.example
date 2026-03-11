@@ -1,0 +1,21 @@
+# LLM API配置
+LLM_PROVIDER=zhipu
+LLM_API_KEY=
+LLM_MODEL=GLM-4-Flash
+LLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+
+# 向量数据库路径
+VECTOR_DB_PATH=./vector_db/chroma_store
+
+# 检索参数
+RETRIEVAL_TOP_K=5
+RETRIEVAL_MIN_SCORE=0.4
+
+# 应用设置
+APP_TITLE=老年人心理健康助手
+APP_DESCRIPTION=基于专业心理量表的初步评估工具
+
+# 长期记忆配置
+MEMORY_EXPIRE_DAYS=30
+MEMORY_MIN_IMPORTANCE=0.2
+MEMORY_RETRIEVAL_TOP_K=3
