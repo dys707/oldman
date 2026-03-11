@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 问答测试工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", Arial, sans-serif;
+        }
+
+        body {
+            background-color: #f5f7fa;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 24px;
+        }
+
+        .input-area {
+            margin-bottom: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            resize: vertical;
+            min-height: 100px;
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #409eff;
+            box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        #sendBtn {
+            background-color: #409eff;
+            color: white;
+            flex: 1;
+            max-width: 120px;
+        }
+
+        #sendBtn:hover {
+            background-color: #337ecc;
+        }
+
+        #sendBtn:disabled {
+            background-color: #99c2e8;
+            cursor: not-allowed;
+        }
+
+        #clearBtn {
+            background-color: #f56c6c;
+            color: white;
+            flex: 1;
+            max-width: 120px;
+        }
+
+        #clearBtn:hover {
+            background-color: #e45656;
+        }
+
+        .answer-area {
+            margin-top: 30px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 20px;
+        }
+
+        .answer-area h3 {
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .answer-content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 150px;
+            line-height: 1.8;
+            color: #333;
+            white-space: pre-wrap; /* 保留换行 */
+        }
+
+        .loading {
+            color: #409eff;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .error {
+            color: #f56c6c;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .note {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RAG 问答测试工具</h1>
+
+        <!-- 提问输入区域 -->
+        <div class="input-area">
+            <textarea id="questionInput" placeholder="请输入你要测试的问题"></textarea>
+            <div class="btn-group">
+                <button id="sendBtn">发送提问</button>
+                <button id="clearBtn">清空内容</button>
+            </div>
+        </div>
+
+        <!-- 回答展示区域 -->
+        <div class="answer-area">
+            <h3>模型回答：</h3>
+            <div id="answerContent" class="answer-content">
+                等待你的提问...
+            </div>
+        </div>
+
+        <div class="note">
+            提示：可通过回答的准确性、完整性判断是否需要更新资料库
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const questionInput = document.getElementById('questionInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const answerContent = document.getElementById('answerContent');
+
+        // API地址（和你的后端保持一致）
+        const API_URL = "http://localhost:8000/api/rag/answer";
+
+        // 发送请求函数
+        async function sendQuestion() {
+            const question = questionInput.value.trim();
+            if (!question) {
+                alert("请输入要测试的问题！");
+                return;
+            }
+
+            // 状态更新：禁用按钮，显示加载
+            sendBtn.disabled = true;
+            answerContent.className = "answer-content loading";
+            answerContent.textContent = "正在请求回答，请稍候...";
+
+            try {
+                // 发送POST请求到你的API
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ question: question }),
+                    timeout: 30000 // 30秒超时
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP错误，状态码：${response.status}`);
+                }
+
+                const result = await response.json();
+
+                // 显示回答（适配不同的返回格式）
+                answerContent.className = "answer-content";
+                if (result.answer) {
+                    answerContent.textContent = result.answer;
+                } else if (result.data && result.data.answer) {
+                    answerContent.textContent = result.data.answer;
+                } else {
+                    answerContent.textContent = JSON.stringify(result, null, 2);
+                }
+
+            } catch (error) {
+                // 错误处理
+                answerContent.className = "answer-content error";
+                if (error.message.includes("Failed to fetch")) {
+                    answerContent.textContent = `连接失败！请检查：
+1. 后端服务是否已启动（localhost:8000）
+2. API地址是否正确
+3. 防火墙是否拦截了请求
+
+错误详情：${error.message}`;
+                } else {
+                    answerContent.textContent = `请求出错：${error.message}`;
+                }
+            } finally {
+                // 恢复按钮状态
+                sendBtn.disabled = false;
+            }
+        }
+
+        // 清空内容函数
+        function clearContent() {
+            questionInput.value = "";
+            answerContent.className = "answer-content";
+            answerContent.textContent = "等待你的提问...";
+        }
+
+        // 绑定事件
+        sendBtn.addEventListener('click', sendQuestion);
+        clearBtn.addEventListener('click', clearContent);
+
+        // 按Enter键发送（按住Ctrl+Enter换行）
+        questionInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.ctrlKey) {
+                e.preventDefault();
+                sendQuestion();
+            }
+        });
+    </script>
+</body>
+</html>

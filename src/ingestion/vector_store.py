@@ -84,6 +84,27 @@ class VectorStore:
             print(f"创建新集合: {self.collection_name}")
             return collection
 
+    # 在VectorStore类中新增以下方法（任意位置，如get_stats方法后）
+    def delete_documents_by_ids(self, ids: List[str]) -> bool:
+        """
+        根据ID删除向量库中的文档
+        Args:
+            ids: 文档ID列表
+        Returns:
+            是否删除成功
+        """
+        if not ids:
+            return False
+        try:
+            self.collection.delete(ids=ids)
+            print(f"成功删除 {len(ids)} 个文档，当前总数: {self.collection.count()}")
+            return True
+        except Exception as e:
+            print(f"删除文档失败: {str(e)}")
+            return False
+
+
+
     def add_documents(self,
                       chunks: List[Dict[str, Any]],
                       batch_size: int = 100) -> bool:
@@ -195,7 +216,7 @@ class VectorStore:
                         'id': results['ids'][0][i],
                         'content': results['documents'][0][i],
                         'metadata': results['metadatas'][0][i],
-                        'distance': results['distances'][0][i] if 'distances' in results else None
+                        'distance': results['distances'][0][i] if 'distances' in results and results['distances'][0][i] else 1.0
                     }
                     formatted_results.append(result)
 
