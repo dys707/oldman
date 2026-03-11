@@ -1,21 +1,20 @@
-# test_retrieval.py
-from src.ingestion import VectorStore
+import chromadb
+from src.app.utils import load_config
 
-vector_store = VectorStore(persist_directory="./vector_db/chroma_store")
+config = load_config()
+client = chromadb.PersistentClient(path=config['vector_db_path'])
 
-# 测试各种心理相关的问题
-test_questions = [
-    "老年人失眠怎么办",
-    "最近总是心情不好",
-    "对什么事情都提不起兴趣",
-    "经常担心子女",
-    "总觉得身体不舒服但查不出问题"
-]
+# 1. 先确认集合存在
+collections = [c.name for c in client.list_collections()]
+print("当前集合：", collections)
 
-for q in test_questions:
-    print(f"\n问题：{q}")
-    print("-" * 30)
-    results = vector_store.search_by_text(q, n_results=2)
-    for i, r in enumerate(results):
-        print(f"{i+1}. {r['content'][:100]}...")
-        print(f"   相似度: {1 - r['distance']:.4f}")
+if "user_memory" in collections:
+    # 2. 执行删除
+    client.delete_collection("user_memory")
+    print("✅ user_memory 集合已删除")
+else:
+    print("⚠️ user_memory 集合不存在")
+
+# 3. 验证删除结果
+new_collections = [c.name for c in client.list_collections()]
+print("删除后集合：", new_collections)

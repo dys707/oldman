@@ -3,7 +3,7 @@ import chromadb
 import pandas as pd
 
 
-def inspect_chroma_vector_db(db_path="vector_db", collection_name=None):
+def inspect_chroma_vector_db(db_path="vector_db\\chroma_store", collection_name=None):
     """
     增强版：读取 Chroma 向量数据库并以表格形式展示
     注意：db_path 传 chroma_store 所在的文件夹（比如 vector_db），不是直接传 .sqlite3 文件！
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     # 这里填你实际的 vector_db 路径，比如：
     # Windows: ["C:\\你的项目路径\\vector_db"]
     # Mac/Linux: ["/Users/你的用户名/项目路径/vector_db"]
-    possible_paths = ["vector_db"]  # 脚本和 vector_db 同目录就用这个
+    possible_paths = ["vector_db\\chroma_store"]  # 脚本和 vector_db 同目录就用这个
 
     for path in possible_paths:
         print(f"\n{'=' * 60}")

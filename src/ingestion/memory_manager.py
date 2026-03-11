@@ -8,20 +8,23 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from pathlib import Path
 import sys
-# 在文件顶部添加这两行
 import logging
+import requests
+import json
+
 logger = logging.getLogger(__name__)
+
 # 添加项目根路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# 新增：导入ChromaDB嵌入函数接口
+# 导入ChromaDB嵌入函数接口
 from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 from src.ingestion.embedder import DocumentEmbedder
 from src.ingestion.vector_store import VectorStore
 from src.app.utils import load_config
 
-# 新增：定义适配ChromaDB的SentenceTransformer嵌入函数类
+# 定义适配ChromaDB的SentenceTransformer嵌入函数类
 class SentenceTransformerEmbeddingFunction(EmbeddingFunction):
     """适配ChromaDB的SentenceTransformer嵌入函数封装类"""
     def __init__(self, model):
@@ -51,13 +54,12 @@ class UserMemoryManager:
         # 向量库路径，复用现有配置
         self.vector_db_path = vector_db_path or self.config['vector_db_path']
         # 复用现有向量化器
-        self.embedder =  DocumentEmbedder(
+        self.embedder = DocumentEmbedder(
             model_name_or_path=str(project_root / "models" / "text2vec-base-chinese"),
             local_files_only=True
         )
 
-        # ========== 关键修改 ==========
-        # 不再直接传self.embedder.model，而是传封装后的嵌入函数
+        # 初始化嵌入函数
         embedding_function = SentenceTransformerEmbeddingFunction(self.embedder.model)
 
         # 初始化向量库：user_memory集合（记忆），与知识库分离
@@ -66,13 +68,201 @@ class UserMemoryManager:
             collection_name="user_memory",  # 新增记忆集合
             embedding_function=embedding_function  # 传入封装后的嵌入函数
         )
-        # =============================
 
-        # LLM配置（用于记忆提取）
-        self.llm_provider = self.config['llm_provider']
-        self.llm_api_key = self.config['llm_api_key']
-        self.llm_model = self.config['llm_model']
-        self.llm_base_url = self.config['llm_base_url']
+        # LLM配置
+        self.llm_provider = self.config.get('llm_provider', 'openai')
+        self.llm_api_key = self.config.get('llm_api_key', '')
+        self.llm_model = self.config.get('llm_model', 'gpt-3.5-turbo')
+        self.llm_base_url = self.config.get('llm_base_url', 'https://api.openai.com/v1')
+
+        # 尝试导入第三方库，如果失败则降级使用规则提取
+        self.zhipu_available = False
+        if self.llm_provider == "zhipu":
+            try:
+                # 尝试导入必要的依赖
+                import sniffio  # 这个导入会触发安装检查
+                from zhipuai import ZhipuAI
+                self.zhipu_available = True
+                logger.info("智谱AI SDK加载成功")
+            except ImportError as e:
+                logger.warning(f"智谱AI SDK导入失败: {e}，将使用规则提取记忆")
+                logger.warning("请运行: pip install zhipuai sniffio anyio")
+                self.zhipu_available = False
+
+    def _call_llm_api(self, system_prompt: str, user_prompt: str) -> str:
+        """
+        直接调用LLM API，避免依赖QAInterface
+
+        Args:
+            system_prompt: 系统提示词
+            user_prompt: 用户提示词
+
+        Returns:
+            LLM生成的文本
+        """
+        try:
+            if self.llm_provider == "openai":
+                # OpenAI API调用
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.llm_api_key}"
+                }
+
+                payload = {
+                    "model": self.llm_model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.3,  # 降低温度，使输出更稳定
+                    "max_tokens": 150
+                }
+
+                response = requests.post(
+                    f"{self.llm_base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    return result['choices'][0]['message']['content'].strip()
+                else:
+                    logger.error(f"OpenAI API调用失败: {response.status_code} - {response.text}")
+                    return ""
+
+            elif self.llm_provider == "zhipu" and self.zhipu_available:
+                # 智谱AI API调用
+                try:
+                    from zhipuai import ZhipuAI
+
+                    client = ZhipuAI(api_key=self.llm_api_key)
+
+                    response = client.chat.completions.create(
+                        model=self.llm_model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        temperature=0.3,
+                        max_tokens=150
+                    )
+
+                    return response.choices[0].message.content.strip()
+                except Exception as e:
+                    logger.error(f"智谱AI调用失败: {e}")
+                    # 降级使用规则提取
+                    return self._extract_memory_by_rules(user_prompt)
+
+            elif self.llm_provider == "ollama":
+                # Ollama本地模型
+                ollama_base_url = self.config.get('ollama_base_url', 'http://localhost:11434')
+
+                payload = {
+                    "model": self.llm_model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.3,
+                        "num_predict": 150
+                    }
+                }
+
+                response = requests.post(
+                    f"{ollama_base_url}/api/chat",
+                    json=payload,
+                    timeout=30
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    return result['message']['content'].strip()
+                else:
+                    logger.error(f"Ollama API调用失败: {response.status_code} - {response.text}")
+                    # 降级使用规则提取
+                    return self._extract_memory_by_rules(user_prompt)
+            else:
+                # 如果没有配置有效的LLM提供商，使用规则提取
+                logger.warning(f"未配置有效的LLM提供商或提供商不可用: {self.llm_provider}")
+                return self._extract_memory_by_rules(user_prompt)
+
+        except Exception as e:
+            logger.error(f"调用LLM API时发生错误: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # 降级使用规则提取
+            return self._extract_memory_by_rules(user_prompt)
+
+    def _extract_memory_by_rules(self, user_prompt: str) -> str:
+        """
+        使用规则从用户输入中提取记忆（当LLM不可用时的降级方案）
+
+        Args:
+            user_prompt: 包含问题和回答的文本
+
+        Returns:
+            提取的记忆文本
+        """
+        try:
+            # 解析user_prompt中的问题和回答
+            lines = user_prompt.strip().split('\n')
+            question = ""
+            answer = ""
+
+            for line in lines:
+                if line.startswith("用户问题："):
+                    question = line.replace("用户问题：", "").strip()
+                elif line.startswith("AI回答："):
+                    answer = line.replace("AI回答：", "").strip()
+
+            # 提取关键词
+            core_keywords = ["失眠", "抑郁", "焦虑", "健忘", "情绪", "睡眠", "兴趣",
+                            "烦躁", "孤独", "心慌", "不开心", "压力", "头疼", "胸闷",
+                            "食欲", "记忆", "注意力", "社交", "朋友", "家人"]
+
+            # 从问题中提取包含关键词的句子
+            memory_parts = []
+
+            # 检查问题
+            for kw in core_keywords:
+                if kw in question:
+                    # 提取包含关键词的完整句子
+                    sentences = question.split('。')
+                    for sent in sentences:
+                        if kw in sent and len(sent) > 3:
+                            memory_parts.append(sent.strip())
+                            break
+
+            # 如果问题中没有，检查回答
+            if not memory_parts:
+                for kw in core_keywords:
+                    if kw in answer:
+                        sentences = answer.split('。')
+                        for sent in sentences:
+                            if kw in sent and len(sent) > 3:
+                                # 截取关键部分
+                                if len(sent) > 50:
+                                    sent = sent[:50] + "..."
+                                memory_parts.append(sent.strip())
+                                break
+
+            # 如果找到了关键信息，合并返回
+            if memory_parts:
+                memory_text = "；".join(memory_parts[:2])  # 最多合并两条
+                if len(memory_text) > 50:
+                    memory_text = memory_text[:50] + "..."
+                return memory_text
+
+            # 如果还是没有，返回空字符串
+            return ""
+
+        except Exception as e:
+            logger.error(f"规则提取记忆失败: {e}")
+            return ""
 
     def extract_memory(self, user_id: str, question: str, answer: str) -> str:
         """
@@ -86,42 +276,37 @@ class UserMemoryManager:
             提取后的记忆文本（简洁，无冗余）
         """
         # 记忆提取Prompt（专为老年人心理健康场景设计）
-        extract_prompt = f"""
-        你是专业的记忆提取助手，负责从用户问题和AI回答中提取**有价值的长期记忆**，仅提取与老年人心理健康相关的关键信息，过滤无意义的寒暄、重复内容。
-        提取规则：
-        1. 记忆文本简洁明了，控制在50字以内；
-        2. 必须包含核心信息（如症状、诉求、状态、建议等）；
-        3. 无价值内容（如“你好”“谢谢”）返回空字符串；
-        4. 格式：直接返回记忆文本，无需额外说明。
+        system_prompt = """你是专业的记忆提取助手，严格按照规则提取记忆。
+提取规则：
+1. 记忆文本简洁明了，控制在50字以内；
+2. 必须包含核心信息（如症状、诉求、状态、建议等）；
+3. 无价值内容（如“你好”“谢谢”）返回空字符串；
+4. 格式：直接返回记忆文本，无需额外说明。"""
 
-        用户ID：{user_id}
-        用户问题：{question}
-        AI回答：{answer}
-        提取的记忆文本：
-        """
-        # 调用LLM提取记忆（复用QAInterface的LLM调用逻辑）
-        from src.app.qa_interface import QAInterface
-        qa = QAInterface()
-        # 构建纯文本请求，调用LLM
-        if self.llm_provider == "openai":
-            memory_text = qa._call_openai(
-                system_prompt="你是专业的记忆提取助手，严格按照规则提取记忆。",
-                user_prompt=extract_prompt,
-                question=question,
-                context=""
-            )
-        elif self.llm_provider == "zhipu":
-            memory_text = qa._call_zhipu(
-                system_prompt="你是专业的记忆提取助手，严格按照规则提取记忆。",
-                user_prompt=extract_prompt,
-                question=question,
-                context=""
-            )
-        else:
-            memory_text = ""
+        user_prompt = f"""
+用户ID：{user_id}
+用户问题：{question}
+AI回答：{answer}
+提取的记忆文本：
+"""
+
+        # 调用LLM提取记忆
+        memory_text = self._call_llm_api(system_prompt, user_prompt)
+
         # 清洗记忆文本
         memory_text = memory_text.strip()
-        return memory_text if len(memory_text) > 0 else ""
+
+        # 如果返回结果包含多余的解释，尝试提取第一行
+        if '\n' in memory_text and len(memory_text) > 100:
+            memory_text = memory_text.split('\n')[0].strip()
+
+        # 检查是否是有效的记忆（包含有意义的内容）
+        if len(memory_text) < 3 or memory_text in ["", "无", "空", "无价值", "无记忆"]:
+            logger.info(f"提取的记忆为空或无意义")
+            return ""
+
+        logger.info(f"提取的记忆: '{memory_text}' (长度: {len(memory_text)})")
+        return memory_text
 
     def calculate_importance(self, memory_text: str) -> float:
         """
@@ -129,12 +314,36 @@ class UserMemoryManager:
         可根据文本关键词、长度等规则定制，也可调用LLM打分
         简易版：基于老年人心理健康核心关键词匹配打分
         """
+        if not memory_text or len(memory_text) < 3:
+            return 0.0
+
         # 核心关键词（可配置在.env中）
-        core_keywords = ["失眠", "抑郁", "焦虑", "健忘", "情绪", "睡眠", "兴趣", "烦躁", "孤独", "心慌"]
+        core_keywords = ["失眠", "抑郁", "焦虑", "健忘", "情绪", "睡眠", "兴趣", "烦躁", "孤独", "心慌",
+                         "不开心", "压力", "头疼", "胸闷", "食欲", "记忆", "注意力", "社交", "朋友", "家人",
+                         "难过", "担心", "害怕", "紧张", "疲劳", "无力", "疼痛", "吃药", "就医", "咨询"]
+
+        # 计算关键词出现次数
         keyword_count = sum([1 for kw in core_keywords if kw in memory_text])
-        # 基础重要度 + 关键词加成
-        base_imp = 0.3 if len(memory_text) > 10 else 0.1
+
+        # 基于文本长度计算基础分
+        if len(memory_text) <= 5:
+            base_imp = 0.1  # 太短的信息，重要度低
+        elif len(memory_text) <= 10:
+            base_imp = 0.2
+        elif len(memory_text) <= 20:
+            base_imp = 0.3
+        else:
+            base_imp = 0.4
+
+        # 关键词加成
         imp_add = keyword_count * 0.15
+
+        # 如果有多个关键词，可以适当增加权重
+        if keyword_count >= 3:
+            imp_add += 0.1
+        elif keyword_count >= 2:
+            imp_add += 0.05
+
         importance = min(base_imp + imp_add, 1.0)  # 最大1.0
         return round(importance, 2)
 
@@ -143,139 +352,168 @@ class UserMemoryManager:
         将记忆写入vector_db的user_memory集合
         """
         if not memory_text or not user_id:
+            logger.warning(f"记忆写入失败: memory_text为空或user_id为空")
             return False
 
-        # 1. 生成记忆唯一ID
+        if len(memory_text) < 3:
+            logger.info(f"记忆文本太短，跳过写入: '{memory_text}'")
+            return False
+
         memory_id = f"mem_{user_id}_{uuid.uuid4().hex[:8]}"
 
-        # 2. 记忆文本向量化
-        memory_embedding = self.embedder.embed_single_text(memory_text).tolist()
+        try:
+            memory_embedding = self.embedder.embed_single_text(memory_text).tolist()
+        except Exception as e:
+            logger.error(f"记忆向量化失败: {e}")
+            return False
 
-        # 3. 生成时间戳
         timestamp = int(time.time())
-
-        # 4. 计算重要度
         importance = self.calculate_importance(memory_text)
 
-        # ✅ 关键修改：构建符合 VectorStore 格式的数据
+        # ✅ 修改：扁平结构，使用 chunk_id 作为ID键
         memory_doc = {
-            "content": memory_text,  # 改为 content，这是必须的
+            "chunk_id": memory_id,
+            "content": memory_text,
             "embedding": memory_embedding,
-            "metadata": {  # 其他字段全部放入 metadata
-                "id": memory_id,
-                "user_id": user_id,
-                "timestamp": timestamp,
-                "importance": importance
-            }
+            "user_id": user_id,
+            "timestamp": timestamp,
+            "importance": importance
         }
 
-        # 5. 写入向量库（传入单条文档的列表）
-        success = self.memory_vector_store.add_documents([memory_doc])
+        try:
+            success = self.memory_vector_store.add_documents([memory_doc])
+            if success:
+                logger.info(f"记忆写入成功: user_id={user_id}, memory_text='{memory_text}', importance={importance}")
+            else:
+                logger.error(f"记忆写入失败: user_id={user_id}")
 
-        # 6. 写入后立即裁剪冗余记忆
-        self.clean_expired_memory(user_id)
-
-        return success
+            self.clean_expired_memory(user_id)
+            return success
+        except Exception as e:
+            logger.error(f"写入记忆时发生异常: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
 
     def retrieve_memory(self, user_id: str, query_text: str, top_k: int = MEMORY_TOP_K) -> List[Dict[str, Any]]:
         """
         检索指定用户的相关记忆（基于问题文本相似度）
         """
         logger.info("=" * 60)
-        logger.info("【终极调试】retrieve_memory 被调用")
+        logger.info("【记忆检索】retrieve_memory 被调用")
         logger.info(f"参数: user_id={user_id}, query_text={query_text[:50]}..., top_k={top_k}")
 
-        # ===== 直接查看集合中的所有文档 =====
+        # ===== 调试：查看集合所有文档的元数据 =====
         try:
-            # 使用底层 collection 获取所有文档
             all_docs = self.memory_vector_store.collection.get(limit=100)
             logger.info(f"集合中总共有 {len(all_docs['ids'])} 条文档")
-
-            # 打印所有文档的完整信息
             for i in range(len(all_docs['ids'])):
-                logger.info(f"--- 文档 {i + 1} ---")
-                logger.info(f"  id: {all_docs['ids'][i]}")
-                logger.info(f"  metadata: {all_docs['metadatas'][i]}")
-                if all_docs['documents'] and i < len(all_docs['documents']):
-                    logger.info(f"  content: {all_docs['documents'][i][:100]}...")
-
-                # 特别检查 user_id 字段
-                if all_docs['metadatas'][i]:
-                    uid = all_docs['metadatas'][i].get('user_id', 'N/A')
-                    logger.info(f"  user_id字段值: '{uid}'")
-                    logger.info(f"  是否匹配目标 '{user_id}': {uid == user_id}")
-
-            # 统计所有 user_id
-            user_ids = set()
-            for meta in all_docs['metadatas']:
-                if meta:
-                    user_ids.add(meta.get('user_id', 'N/A'))
-            logger.info(f"集合中存在的所有 user_id: {user_ids}")
-
+                logger.info(f"文档 {i}: id={all_docs['ids'][i]}, metadata={all_docs['metadatas'][i]}")
+                if all_docs['documents']:
+                    logger.info(f"   内容: {all_docs['documents'][i][:50]}...")
         except Exception as e:
             logger.error(f"查看集合内容失败: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-        # ====================================
 
-        # ... 原有检索代码 ...
-        # ======================================
-
-        # 1. 向量库过滤：仅检索该user_id的记忆（元数据过滤）
-        filter_dict = {"user_id": user_id}
-        logger.info(f"过滤条件: {filter_dict}")
-
-        # 2. 相似度检索（临时降低阈值）
+        # ===== 调试：直接获取用户所有记忆 =====
         try:
-            # 先尝试不加过滤，看能否检索到任何内容
-            logger.info("尝试不加过滤检索...")
-            no_filter_results = self.memory_vector_store.search_by_text(
-                query_text=query_text,
-                n_results=top_k,
-                filter_metadata=None,  # 不加过滤
-                min_score=0.1
+            all_user_memories = self.memory_vector_store.collection.get(
+                where={"user_id": user_id},
+                limit=100
             )
-            logger.info(f"不加过滤检索到 {len(no_filter_results)} 条")
+            logger.info(f"直接查询用户[{user_id}]的记忆：找到 {len(all_user_memories['ids'])} 条")
+            for i, doc in enumerate(all_user_memories['documents']):
+                logger.info(f"  记忆 {i + 1}: {doc[:50]}...")
+        except Exception as e:
+            logger.error(f"直接查询失败: {e}")
+        # =====================================
 
-            # 再加过滤检索
+        # 1. 首先尝试相似度检索
+        filter_dict = {"user_id": user_id}
+        formatted_results = []
+
+        try:
+            # 相似度检索
             memory_results = self.memory_vector_store.search_by_text(
                 query_text=query_text,
-                n_results=top_k,
-                filter_metadata=filter_dict,
-                min_score=0.1  # 临时降低阈值
+                n_results=top_k * 3,
+                filter_metadata=filter_dict
             )
-            logger.info(f"加过滤检索到 {len(memory_results)} 条原始结果")
 
-            # 打印原始结果
-            for i, res in enumerate(memory_results):
-                logger.info(f"原始结果 {i + 1}:")
-                logger.info(f"  - content: {res.get('content', '')[:50]}...")
-                logger.info(f"  - metadata: {res.get('metadata', {})}")
-                logger.info(f"  - distance: {res.get('distance', 'N/A')}")
+            # 处理检索结果
+            for res in memory_results:
+                metadata = res.get('metadata', {})
+                if metadata.get('user_id') != user_id:
+                    continue
+
+                distance = res.get('distance', 1.0)
+                similarity = 1 / (1 + distance) if distance != 'N/A' else 0.5
+
+                formatted_results.append({
+                    'content': res.get('content', ''),
+                    'user_id': metadata.get('user_id', ''),
+                    'timestamp': metadata.get('timestamp', 0),
+                    'importance': metadata.get('importance', 0.0),
+                    'similarity': round(similarity, 4),
+                    'timestamp_str': time.strftime("%Y-%m-%d %H:%M:%S",
+                                                   time.localtime(metadata.get('timestamp', 0)))
+                })
 
         except Exception as e:
-            logger.error(f"检索异常: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return []
+            logger.error(f"相似度检索失败: {e}")
 
-        # 3. 格式化结果
-        formatted_results = []
-        for res in memory_results:
-            metadata = res.get('metadata', {})
-            formatted = {
-                'content': res.get('content', ''),
-                'user_id': metadata.get('user_id', ''),
-                'timestamp': metadata.get('timestamp', 0),
-                'importance': metadata.get('importance', 0.0),
-                'similarity': round(1 - res.get('distance', 0), 4) if res.get('distance') else 0.0,
-                'timestamp_str': time.strftime("%Y-%m-%d %H:%M:%S",
-                                               time.localtime(metadata.get('timestamp', 0)))
-            }
-            formatted_results.append(formatted)
-            logger.info(f"格式化后记忆: {formatted}")
+        # 2. 如果相似度检索结果太少，补充最近的重要记忆
+        if len(formatted_results) < top_k:
+            try:
+                # 获取用户最近的一些记忆
+                user_memories = self.memory_vector_store.collection.get(
+                    where={"user_id": user_id},
+                    limit=top_k * 2
+                )
 
-        logger.info(f"返回 {len(formatted_results)} 条格式化记忆")
+                if user_memories and user_memories['ids']:
+                    existing_contents = {r['content'] for r in formatted_results}
+
+                    for i in range(len(user_memories['ids'])):
+                        if len(formatted_results) >= top_k:
+                            break
+
+                        metadata = user_memories['metadatas'][i]
+                        content = user_memories['documents'][i]
+
+                        # 避免重复
+                        if content in existing_contents:
+                            continue
+
+                        # 只添加重要度较高的记忆
+                        importance = metadata.get('importance', 0.0)
+                        if importance >= MEMORY_MIN_IMPORTANCE:
+                            formatted_results.append({
+                                'content': content,
+                                'user_id': metadata.get('user_id', ''),
+                                'timestamp': metadata.get('timestamp', 0),
+                                'importance': importance,
+                                'similarity': 0.3,  # 给一个基础相似度
+                                'timestamp_str': time.strftime("%Y-%m-%d %H:%M:%S",
+                                                               time.localtime(metadata.get('timestamp', 0)))
+                            })
+                            existing_contents.add(content)
+
+            except Exception as e:
+                logger.error(f"获取补充记忆失败: {e}")
+
+        # 3. 排序并返回
+        if formatted_results:
+            # 按相似度和重要度排序
+            formatted_results.sort(key=lambda x: (x['similarity'], x['importance']), reverse=True)
+            formatted_results = formatted_results[:top_k]
+
+            logger.info(f"最终返回 {len(formatted_results)} 条记忆:")
+            for i, mem in enumerate(formatted_results):
+                logger.info(
+                    f"  {i + 1}. {mem['content'][:50]}... (相似度:{mem['similarity']}, 重要度:{mem['importance']})")
+        else:
+            logger.info(f"用户 {user_id} 没有任何记忆")
+
         return formatted_results
 
     def clean_expired_memory(self, user_id: Optional[str] = None) -> int:
@@ -287,43 +525,127 @@ class UserMemoryManager:
             被删除的记忆数量
         """
         deleted_count = 0
-        # 1. 计算过期时间戳（当前时间 - 过期天数*86400秒）
-        expire_timestamp = int(time.time()) - (MEMORY_EXPIRE_DAYS * 86400)
-        # 2. 获取待清理的记忆ID
-        all_memories = self.memory_vector_store.get_all_documents(limit=1000)  # 单次最多清理1000条
-        for mem in all_memories:
-            # 过滤用户（如果指定）
-            if user_id and mem['metadata'].get('user_id') != user_id:
-                continue
-            # 获取记忆的timestamp和importance
-            mem_ts = mem['metadata'].get('timestamp', 0)
-            mem_imp = mem['metadata'].get('importance', 0.0)
-            # 判定是否删除：过期 OR 低重要度
-            if mem_ts < expire_timestamp or mem_imp < MEMORY_MIN_IMPORTANCE:
-                # 删除该记忆（Chroma通过ID删除）
-                self.memory_vector_store.collection.delete(ids=[mem['id']])
-                deleted_count += 1
+        try:
+            # 1. 计算过期时间戳（当前时间 - 过期天数*86400秒）
+            expire_timestamp = int(time.time()) - (MEMORY_EXPIRE_DAYS * 86400)
+
+            # 2. 构建过滤条件
+            where_filter = {"user_id": user_id} if user_id else None
+
+            # 3. 获取所有记忆
+            all_docs = self.memory_vector_store.collection.get(
+                where=where_filter,
+                limit=1000
+            )
+
+            if not all_docs or not all_docs['ids']:
+                logger.info("没有需要清理的记忆")
+                return 0
+
+            # 4. 筛选需要删除的记忆ID
+            ids_to_delete = []
+            for i, mem_id in enumerate(all_docs['ids']):
+                metadata = all_docs['metadatas'][i] if i < len(all_docs['metadatas']) else {}
+
+                # 获取记忆的timestamp和importance
+                mem_ts = metadata.get('timestamp', 0)
+                mem_imp = metadata.get('importance', 0.0)
+
+                # 判定是否删除：过期 OR 低重要度
+                if mem_ts < expire_timestamp or mem_imp < MEMORY_MIN_IMPORTANCE:
+                    ids_to_delete.append(mem_id)
+                    reason = "过期" if mem_ts < expire_timestamp else "低重要度"
+                    logger.info(f"标记删除记忆: id={mem_id}, user_id={metadata.get('user_id')}, "
+                               f"reason={reason}, importance={mem_imp}, timestamp={mem_ts}")
+
+            # 5. 批量删除
+            if ids_to_delete:
+                self.memory_vector_store.collection.delete(ids=ids_to_delete)
+                deleted_count = len(ids_to_delete)
+                logger.info(f"已删除 {deleted_count} 条冗余记忆")
+            else:
+                logger.info("没有需要删除的记忆")
+
+        except Exception as e:
+            logger.error(f"清理记忆时发生错误: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
         return deleted_count
 
     def get_user_memory_stats(self, user_id: str) -> Dict[str, Any]:
         """获取指定用户的记忆统计信息（用于调试/监控）"""
-        filter_dict = {"user_id": user_id}
-        all_mem = self.memory_vector_store.search(
-            query_text="",
-            query_embedding=[0.0]*768,  # 任意向量，仅过滤用户
-            n_results=1000,
-            filter_metadata=filter_dict
-        )
-        total = len(all_mem)
-        # 统计低重要度/即将过期的记忆
-        expire_ts = int(time.time()) - (MEMORY_EXPIRE_DAYS * 86400)
-        low_imp_count = sum([1 for m in all_mem if m['metadata'].get('importance', 0.0) < MEMORY_MIN_IMPORTANCE])
-        expire_count = sum([1 for m in all_mem if m['metadata'].get('timestamp', 0) < expire_ts])
-        return {
-            "user_id": user_id,
-            "total_memory": total,
-            "low_importance_memory": low_imp_count,
-            "expire_memory": expire_count,
-            "expire_days": MEMORY_EXPIRE_DAYS,
-            "min_importance": MEMORY_MIN_IMPORTANCE
-        }
+        try:
+            filter_dict = {"user_id": user_id}
+
+            # 获取用户的所有记忆
+            user_docs = self.memory_vector_store.collection.get(
+                where=filter_dict,
+                limit=1000
+            )
+
+            total = len(user_docs['ids']) if user_docs else 0
+
+            if total == 0:
+                return {
+                    "user_id": user_id,
+                    "total_memory": 0,
+                    "low_importance_memory": 0,
+                    "expire_memory": 0,
+                    "expire_days": MEMORY_EXPIRE_DAYS,
+                    "min_importance": MEMORY_MIN_IMPORTANCE,
+                    "avg_importance": 0.0,
+                    "memories": []
+                }
+
+            # 统计低重要度/即将过期的记忆
+            expire_ts = int(time.time()) - (MEMORY_EXPIRE_DAYS * 86400)
+            low_imp_count = 0
+            expire_count = 0
+            total_importance = 0.0
+            memories_list = []
+
+            for i in range(total):
+                metadata = user_docs['metadatas'][i] if i < len(user_docs['metadatas']) else {}
+                content = user_docs['documents'][i] if i < len(user_docs['documents']) else ""
+
+                importance = metadata.get('importance', 0.0)
+                timestamp = metadata.get('timestamp', 0)
+
+                total_importance += importance
+
+                if importance < MEMORY_MIN_IMPORTANCE:
+                    low_imp_count += 1
+                if timestamp < expire_ts:
+                    expire_count += 1
+
+                # 收集最近的记忆用于显示
+                memories_list.append({
+                    "content": content[:30] + "..." if len(content) > 30 else content,
+                    "importance": importance,
+                    "timestamp": timestamp,
+                    "timestamp_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
+                })
+
+            # 按时间排序，最新的在前
+            memories_list.sort(key=lambda x: x['timestamp'], reverse=True)
+
+            return {
+                "user_id": user_id,
+                "total_memory": total,
+                "low_importance_memory": low_imp_count,
+                "expire_memory": expire_count,
+                "expire_days": MEMORY_EXPIRE_DAYS,
+                "min_importance": MEMORY_MIN_IMPORTANCE,
+                "avg_importance": round(total_importance / total, 2) if total > 0 else 0.0,
+                "recent_memories": memories_list[:5]  # 返回最近5条记忆
+            }
+
+        except Exception as e:
+            logger.error(f"获取记忆统计时发生错误: {e}")
+
+            return {
+                "user_id": user_id,
+                "error": str(e),
+                "total_memory": 0
+            }

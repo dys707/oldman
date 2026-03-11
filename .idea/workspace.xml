@@ -4,17 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="31393808-0a7e-4ec7-bda4-113a16259322" name="更改" comment="&#10;框架没有问题，VPN有问题">
-      <change afterPath="$PROJECT_DIR$/go_on.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/go_on.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/ingestion/memory_manager.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" afterPath="$PROJECT_DIR$/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.evn" beforeDir="false" />
+    <list default="true" id="31393808-0a7e-4ec7-bda4-113a16259322" name="更改" comment="自行修改start">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/app/_init_.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/_init_.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/app/qa_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/qa_interface.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ingestion/vector_store.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ingestion/vector_store.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ingestion/memory_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ingestion/memory_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test.py" beforeDir="false" afterPath="$PROJECT_DIR$/test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/test2.py" beforeDir="false" afterPath="$PROJECT_DIR$/test2.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -44,33 +37,33 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "DefaultHtmlFileTemplate": "HTML File",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.__init__.executor": "Run",
-    "Python._init_.executor": "Run",
-    "Python.chunker.executor": "Run",
-    "Python.despacio.executor": "Run",
-    "Python.go_on.executor": "Run",
-    "Python.init_db.executor": "Run",
-    "Python.main.executor": "Run",
-    "Python.model_loader.executor": "Run",
-    "Python.process.executor": "Run",
-    "Python.qa_interface.executor": "Run",
-    "Python.rag_assistant.executor": "Run",
-    "Python.temp1.executor": "Run",
-    "Python.temp2.executor": "Run",
-    "Python.test.executor": "Run",
-    "Python.test2.executor": "Run",
-    "Python.test_retrieval.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "D:/codeFiles/python/psychology_rag"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.__init__.executor&quot;: &quot;Run&quot;,
+    &quot;Python._init_.executor&quot;: &quot;Run&quot;,
+    &quot;Python.chunker.executor&quot;: &quot;Run&quot;,
+    &quot;Python.despacio.executor&quot;: &quot;Run&quot;,
+    &quot;Python.go_on.executor&quot;: &quot;Run&quot;,
+    &quot;Python.init_db.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.model_loader.executor&quot;: &quot;Run&quot;,
+    &quot;Python.process.executor&quot;: &quot;Run&quot;,
+    &quot;Python.qa_interface.executor&quot;: &quot;Run&quot;,
+    &quot;Python.rag_assistant.executor&quot;: &quot;Run&quot;,
+    &quot;Python.temp1.executor&quot;: &quot;Run&quot;,
+    &quot;Python.temp2.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test2.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_retrieval.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/codeFiles/python/psychology_rag&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -102,12 +95,32 @@
       <option name="project" value="LOCAL" />
       <updated>1772947188209</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="自行修改start">
+      <option name="closed" value="true" />
+      <created>1773210011938</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1773210011938</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="资料向量化" />
     <MESSAGE value="&#10;框架没有问题，VPN有问题" />
-    <option name="LAST_COMMIT_MESSAGE" value="&#10;框架没有问题，VPN有问题" />
+    <MESSAGE value="自行修改start" />
+    <option name="LAST_COMMIT_MESSAGE" value="自行修改start" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/app/main.py</url>
+          <line>152</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>
