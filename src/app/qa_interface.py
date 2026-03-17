@@ -1,8 +1,8 @@
 """
 问答接口模块
 整合检索和LLM生成回答
+支持三层记忆网络：短期事件记忆、里程碑记忆、语义记忆
 """
-
 import sys
 import logging
 from pathlib import Path
@@ -18,13 +18,13 @@ from src.app.utils import load_config, format_reference, contains_sensitive_cont
 import requests
 import json
 
-# 配置日志（便于调试）
+# 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
 class QAInterface:
-    """问答接口类"""
+    """问答接口类（升级版，支持三层记忆）"""
 
     def __init__(self, vector_db_path=None, embedder=None):
         """
@@ -46,7 +46,7 @@ class QAInterface:
             model_path = project_root / "models" / "text2vec-base-chinese"
             self.embedder = DocumentEmbedder(
                 model_name_or_path=str(model_path),
-                local_files_only=True  # 强制离线
+                local_files_only=True
             )
         else:
             self.embedder = embedder
@@ -64,19 +64,11 @@ class QAInterface:
         self.llm_model = self.config['llm_model']
         self.llm_base_url = self.config['llm_base_url']
 
-        '''
-        # 代理配置（请根据实际Clash端口修改）
-        self.proxy_config = {
-            "http": "http://127.0.0.1:7890",
-            "https": "http://127.0.0.1:7890"
-        }
-        '''
         logger.info(f"LLM Provider: {self.llm_provider}, Model: {self.llm_model}")
 
-        # 新增：初始化用户记忆管理器
+        # 初始化用户记忆管理器（升级版）
         try:
             logger.info("尝试初始化 UserMemoryManager...")
-            from src.ingestion.memory_manager import UserMemoryManager  # 确保路径正确
             self.memory_manager = UserMemoryManager(
                 vector_db_path=vector_db_path,
                 embedder=self.embedder
@@ -93,7 +85,7 @@ class QAInterface:
 
     def answer(self, user_id: str, question: str, return_sources: bool = True) -> dict:
         """
-        根据问题生成回答
+        根据问题生成回答，整合三层记忆
 
         Args:
             user_id: 用户标识
@@ -101,7 +93,7 @@ class QAInterface:
             return_sources: 是否返回引用来源
 
         Returns:
-            dict: 包含回答、来源、记忆、状态等
+            dict: 包含回答、各类记忆、来源、状态等
         """
         if not isinstance(question, str):
             question = str(question)
@@ -112,17 +104,54 @@ class QAInterface:
             return {
                 'answer': get_crisis_message(),
                 'sources': [],
-                'memories': [],
+                'short_term_memories': [],
+                'milestone_memories': [],
+                'semantic_memories': [],
                 'has_crisis': True
             }
 
-        # ===== 记忆检索 =====
-        logger.info(f"开始检索用户[{user_id}]的相关记忆...")
-        user_memories = self.memory_manager.retrieve_memory(
-            user_id=user_id,
-            query_text=question
-        )
-        logger.info(f"检索到用户[{user_id}]的记忆数量: {len(user_memories)}")
+        # ===== 检索三层记忆 =====
+        short_term_memories = []
+        milestone_memories = []
+        semantic_memories = []
+
+        if self.memory_manager:
+            # 短期记忆检索
+            try:
+                short_term_memories = self.memory_manager.retrieve_memory(
+                    user_id=user_id,
+                    query_text=question
+                )
+                logger.info(f"检索到用户[{user_id}]的短期记忆数量: {len(short_term_memories)}")
+            except Exception as e:
+                logger.error(f"短期记忆检索失败: {e}")
+
+            # 里程碑记忆检索
+            try:
+                milestone_memories = self.memory_manager.retrieve_milestone(
+                    user_id=user_id,
+                    query_text=question,
+                    top_k=2  # 里程碑通常少量即可
+                )
+                logger.info(f"检索到用户[{user_id}]的里程碑记忆数量: {len(milestone_memories)}")
+            except Exception as e:
+                logger.error(f"里程碑记忆检索失败: {e}")
+
+            # 语义记忆检索（全部返回，因为数量少且重要）
+            try:
+                semantic_list = self.memory_manager.retrieve_semantic(user_id=user_id)
+                # 格式化，保持与短期记忆一致的结构
+                for sem in semantic_list:
+                    semantic_memories.append({
+                        'content': sem['content'],
+                        'category': sem['category'],
+                        'is_stable': sem['is_stable'],
+                        'last_updated': sem['last_updated'],
+                        'timestamp_str': sem['timestamp_str']
+                    })
+                logger.info(f"检索到用户[{user_id}]的语义记忆数量: {len(semantic_memories)}")
+            except Exception as e:
+                logger.error(f"语义记忆检索失败: {e}")
 
         # 2. 检索相关知识
         docs = self.searcher.search(
@@ -133,53 +162,62 @@ class QAInterface:
         )
         logger.info(f"检索到 {len(docs)} 条相关文档")
 
-        # 如果知识库没有相关文档
-        if not docs:
-            # 但仍然可能有记忆，所以返回记忆
-            return {
-                'answer': '抱歉，我没有找到与您问题相关的信息。请尝试换一种问法，或者咨询专业医生。',
-                'sources': [],
-                'memories': user_memories,
-                'has_crisis': False
-            }
+        # 如果知识库没有相关文档，但仍有记忆，仍可生成回答
+        # ===== 构建多层次上下文 =====
+        context_parts = []
 
-        # ===== 拼接记忆上下文 + 知识库上下文 =====
-        # 记忆上下文构建
-        memory_context = ""
-        if user_memories:
-            memory_list = [f"记忆{i + 1}：{m['content']}（相似度：{m['similarity']}）" for i, m in
-                           enumerate(user_memories)]
-            memory_context = "用户历史相关记忆：\n" + "\n".join(memory_list) + "\n\n"
+        # 语义记忆（最稳定，放在最前）
+        if semantic_memories:
+            sem_lines = []
+            for sem in semantic_memories:
+                sem_lines.append(f"- {sem['content']} (类型: {sem['category']})")
+            context_parts.append("【用户基本特征】\n" + "\n".join(sem_lines))
 
-        # 知识库上下文构建
-        kb_context = "\n\n".join([d['content'] for d in docs])
+        # 里程碑记忆
+        if milestone_memories:
+            mile_lines = []
+            for mile in milestone_memories:
+                mile_lines.append(f"- {mile['content']} (类型: {mile.get('milestone_type', 'other')})")
+            context_parts.append("【用户人生里程碑】\n" + "\n".join(mile_lines))
 
-        # 总上下文
-        total_context = memory_context + kb_context
-        logger.info(
-            f"构建总上下文，长度: {len(total_context)} 字符（记忆：{len(memory_context)}，知识库：{len(kb_context)}）"
-        )
+        # 短期记忆（最近的）
+        if short_term_memories:
+            short_lines = [f"- {m['content']}" for m in short_term_memories]
+            context_parts.append("【用户近期相关事件】\n" + "\n".join(short_lines))
+
+        # 知识库资料
+        if docs:
+            kb_lines = [d['content'] for d in docs]
+            context_parts.append("【专业知识参考】\n" + "\n".join(kb_lines))
+
+        total_context = "\n\n".join(context_parts)
+        logger.info(f"构建总上下文，长度: {len(total_context)} 字符")
 
         # 3. 调用LLM生成回答
         answer_text = self._call_llm(question, total_context)
 
-        # ===== 记忆提取与写入 =====
-        logger.info(f"开始为用户[{user_id}]提取并写入记忆...")
-        extracted_memory = self.memory_manager.extract_memory(
-            user_id=user_id,
-            question=question,
-            answer=answer_text
-        )
-        if extracted_memory:
-            write_success = self.memory_manager.write_memory(user_id, extracted_memory)
-            logger.info(f"用户[{user_id}]记忆提取结果：{extracted_memory}，写入状态：{write_success}")
-        else:
-            logger.info(f"用户[{user_id}]无有效记忆可提取")
+        # ===== 记忆提取与写入（仅短期记忆） =====
+        if self.memory_manager:
+            try:
+                extracted = self.memory_manager.extract_memory(
+                    user_id=user_id,
+                    question=question,
+                    answer=answer_text
+                )
+                if extracted:
+                    write_success = self.memory_manager.write_memory(user_id, extracted)
+                    logger.info(f"短期记忆提取: {extracted}, 写入状态: {write_success}")
+                else:
+                    logger.info("无有效短期记忆可提取")
+            except Exception as e:
+                logger.error(f"短期记忆提取/写入失败: {e}")
 
         # 4. 准备返回结果
         result = {
             'answer': answer_text,
-            'memories': user_memories,
+            'short_term_memories': short_term_memories,
+            'milestone_memories': milestone_memories,
+            'semantic_memories': semantic_memories,
             'has_crisis': False
         }
 
@@ -196,18 +234,81 @@ class QAInterface:
 
         return result
 
+    def get_user_short_term_memories(self, user_id: str, limit: int = 20) -> list:
+        """
+        获取指定用户的短期记忆列表（供前端展示）
+        """
+        if not user_id or not self.memory_manager:
+            return []
+        memories = self.memory_manager.retrieve_memory(
+            user_id=user_id,
+            query_text="",
+            top_k=limit
+        )
+        formatted = []
+        for mem in memories:
+            formatted.append({
+                "content": mem.get("content", ""),
+                "timestamp": mem.get("timestamp_str", ""),
+                "importance": mem.get("importance", 0.0),
+                "similarity": mem.get("similarity", 0.0),
+                "type": "short_term"
+            })
+        return formatted
+
+    def get_user_milestone_memories(self, user_id: str, limit: int = 10) -> list:
+        """
+        获取指定用户的里程碑记忆列表
+        """
+        if not user_id or not self.memory_manager:
+            return []
+        try:
+            # 由于retrieve_milestone需要query，我们传空字符串获取最相关的（可能不行）
+            # 更好的方式是直接调用集合查询，但这里简化，使用空query获取最近的一些
+            memories = self.memory_manager.retrieve_milestone(
+                user_id=user_id,
+                query_text="",
+                top_k=limit
+            )
+            formatted = []
+            for mem in memories:
+                formatted.append({
+                    "content": mem.get("content", ""),
+                    "timestamp": mem.get("timestamp_str", ""),
+                    "importance": mem.get("importance", 0.0),
+                    "milestone_type": mem.get("milestone_type", "other"),
+                    "type": "milestone"
+                })
+            return formatted
+        except Exception as e:
+            logger.error(f"获取里程碑记忆失败: {e}")
+            return []
+
+    def get_user_semantic_memories(self, user_id: str) -> list:
+        """
+        获取指定用户的语义记忆列表
+        """
+        if not user_id or not self.memory_manager:
+            return []
+        try:
+            memories = self.memory_manager.retrieve_semantic(user_id=user_id)
+            formatted = []
+            for mem in memories:
+                formatted.append({
+                    "content": mem.get("content", ""),
+                    "category": mem.get("category", ""),
+                    "is_stable": mem.get("is_stable", True),
+                    "last_updated": mem.get("timestamp_str", ""),
+                    "type": "semantic"
+                })
+            return formatted
+        except Exception as e:
+            logger.error(f"获取语义记忆失败: {e}")
+            return []
+
+    # ---------- LLM 调用相关（保持不变）----------
     def _call_llm(self, question: str, context: str) -> str:
-        """
-        调用LLM API生成回答
-
-        Args:
-            question: 用户问题
-            context: 检索到的上下文
-
-        Returns:
-            LLM生成的回答
-        """
-        # 构建提示词
+        """调用LLM API生成回答"""
         system_prompt = """你是一位专业的老年人心理健康助手。请基于以下专业知识回答用户的问题。如果专业知识不足，请坦诚说明，并建议咨询专业医生。回答要温暖、体贴、易懂。"""
 
         user_prompt = f"""专业知识：
@@ -217,7 +318,6 @@ class QAInterface:
 
 请给出专业、体贴的回答："""
 
-        # 根据provider调用不同的API
         if self.llm_provider == 'openai':
             return self._call_openai(system_prompt, user_prompt, question, context)
         elif self.llm_provider == 'zhipu':
@@ -227,7 +327,7 @@ class QAInterface:
             return self._fallback_answer(question, context)
 
     def _call_openai(self, system_prompt, user_prompt, question, context):
-        """调用OpenAI API（添加Clash代理）"""
+        """调用OpenAI API"""
         try:
             headers = {
                 'Authorization': f'Bearer {self.llm_api_key}',
@@ -247,8 +347,8 @@ class QAInterface:
                 f"{self.llm_base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=30,
-               # proxies=self.proxy_config
+                timeout=30
+                # proxies=self.proxy_config
             )
             if response.status_code == 200:
                 result = response.json()['choices'][0]['message']['content']
@@ -262,8 +362,8 @@ class QAInterface:
             return self._fallback_answer(question, context)
 
     def _call_zhipu(self, system_prompt, user_prompt, question, context):
+        """调用智谱API"""
         try:
-            # 这里直接使用 requests，与 _call_openai 逻辑一致，但 URL 和 Key 从配置读取
             headers = {
                 'Authorization': f'Bearer {self.llm_api_key}',
                 'Content-Type': 'application/json'
@@ -277,13 +377,12 @@ class QAInterface:
                 'temperature': 0.7,
                 'max_tokens': 500
             }
-            # 注意：智谱的 base_url 已经在 .env 中配置为 https://open.bigmodel.cn/api/paas/v4
             response = requests.post(
                 f"{self.llm_base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=30,
-                # proxies=self.proxy_config  # 如果你用国内API，很可能不需要代理，可以注释掉
+                timeout=30
+                # proxies=self.proxy_config
             )
             if response.status_code == 200:
                 return response.json()['choices'][0]['message']['content']

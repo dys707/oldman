@@ -3,20 +3,20 @@ RAG 服务主入口
 提供 FastAPI 接口，支持单独下载模型
 健康检查：http://localhost:8000/health
 API 文档：http://localhost:8000/docs
-调用接口：POST http://localhost:8000/api/rag/answer，JSON 体如 {"question": "失眠怎么办"}
+调用接口：POST http://localhost:8000/api/rag/answer，JSON 体如 {"user_id": "laowang", "question": "失眠怎么办"}
 python src/app/main.py --port 8000
-
 """
 
 import sys
 import os
 from pathlib import Path
+from fastapi import FastAPI, HTTPException, Query
 
 # 将项目根目录添加到 Python 路径，确保绝对导入正常工作
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-# 使用绝对导入，避免相对导入问题
+# 使用绝对导入
 from src.app.qa_interface import QAInterface
 from src.app.utils import load_config
 import argparse
@@ -81,12 +81,14 @@ def run_fastapi():
         question: str
         return_sources: bool = True
 
-    # 定义响应体格式
+    # 定义响应体格式（升级版，支持三层记忆）
     class RAGResponse(BaseModel):
         answer: str
         sources: list = []
         sources_text: str = ""
-        memories: list = []  # 新增：返回用户相关记忆
+        short_term_memories: list = []   # 短期事件记忆
+        milestone_memories: list = []     # 里程碑记忆
+        semantic_memories: list = []       # 语义记忆
         has_crisis: bool = False
         code: int = 200
         msg: str = "success"
@@ -106,23 +108,14 @@ def run_fastapi():
                 return_sources=request.return_sources
             )
             print(f"生成结果成功，result keys: {list(result.keys())}")
-            # 🔍 添加诊断打印
-            print("--- 调试信息 ---")
-            print(f"result keys: {list(result.keys())}")
-            if 'memories' in result:
-                print(f"memories 类型: {type(result['memories'])}")
-                if result['memories']:
-                    print(f"第一条记忆类型: {type(result['memories'][0])}")
-                    print(f"第一条记忆内容: {result['memories'][0]}")
-                else:
-                    print("memories 是空列表")
-            print("----------------")
 
             return RAGResponse(
                 answer=result['answer'],
                 sources=result.get('sources', []),
                 sources_text=result.get('sources_text', ''),
-                memories=result.get('memories', []),
+                short_term_memories=result.get('short_term_memories', []),
+                milestone_memories=result.get('milestone_memories', []),
+                semantic_memories=result.get('semantic_memories', []),
                 has_crisis=result.get('has_crisis', False)
             )
         except Exception as e:
@@ -130,6 +123,63 @@ def run_fastapi():
             err_trace = traceback.format_exc()
             print(f"❌ 接口异常：\n{err_trace}")
             raise HTTPException(status_code=500, detail=f"服务异常：{str(e)}")
+
+    # ========== 新增：获取各类记忆的端点 ==========
+    @app.get("/api/rag/short_term_memories")
+    def get_short_term_memories(
+            user_id: str = Query(..., description="用户唯一标识"),
+            limit: int = Query(20, description="返回记忆数量上限")
+    ):
+        """获取用户的短期事件记忆"""
+        try:
+            memories = qa.get_user_short_term_memories(user_id=user_id, limit=limit)
+            return {
+                "code": 200,
+                "msg": "success",
+                "data": {
+                    "short_term_memories": memories,
+                    "count": len(memories)
+                }
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"获取短期记忆失败：{str(e)}")
+
+    @app.get("/api/rag/milestone_memories")
+    def get_milestone_memories(
+            user_id: str = Query(..., description="用户唯一标识"),
+            limit: int = Query(10, description="返回记忆数量上限")
+    ):
+        """获取用户的里程碑记忆"""
+        try:
+            memories = qa.get_user_milestone_memories(user_id=user_id, limit=limit)
+            return {
+                "code": 200,
+                "msg": "success",
+                "data": {
+                    "milestone_memories": memories,
+                    "count": len(memories)
+                }
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"获取里程碑记忆失败：{str(e)}")
+
+    @app.get("/api/rag/semantic_memories")
+    def get_semantic_memories(
+            user_id: str = Query(..., description="用户唯一标识")
+    ):
+        """获取用户的语义记忆（稳定和动态）"""
+        try:
+            memories = qa.get_user_semantic_memories(user_id=user_id)
+            return {
+                "code": 200,
+                "msg": "success",
+                "data": {
+                    "semantic_memories": memories,
+                    "count": len(memories)
+                }
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"获取语义记忆失败：{str(e)}")
 
     # 启动服务，允许外部访问
     uvicorn.run(
