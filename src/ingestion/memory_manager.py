@@ -61,6 +61,7 @@ SHORT_TERM_LOW_IMPORTANCE_PERCENT = 0.35  # 如果合并后仍超安全线，删
 MILESTONE_MAX_COUNT = config.get("milestone_max_count", 200)  # 里程碑记忆最大容量
 MILESTONE_CAPACITY_THRESHOLD = 0.95  # 触发容量管理的阈值
 MILESTONE_MIN_LEFT = 20  # 容量管理后至少保留的记忆条数
+MILESTONE_BUFFER_THRESHOLD = 10  # 里程碑候选缓冲区触发阈值
 
 # 语义记忆配置
 STABLE_SEMANTIC_CATEGORIES = [
@@ -82,6 +83,24 @@ DYNAMIC_SEMANTIC_CATEGORIES = [
 ]
 STABLE_UPDATE_THRESHOLD_DAYS = 180  # 稳定语义更新阈值：6个月
 DYNAMIC_UPDATE_THRESHOLD_DAYS = 90  # 动态语义更新阈值：3个月
+SEMANTIC_BUFFER_THRESHOLD = 3  # 语义候选缓冲区触发阈值
+
+# 关键词到语义类别的映射（用于初步筛选）
+SEMANTIC_KEYWORDS = {
+    "personality": ["性格", "内向", "外向", "开朗", "安静", "脾气", "急性子", "慢性子"],
+    "values": ["价值观", "人生", "看中", "原则", "信仰", "追求"],
+    "profession": ["职业", "工作", "退休", "职业是", "做过的", "单位", "上班"],
+    "life_story": ["经历", "当年", "年轻时候", "曾经", "往事", "回忆"],
+    "identity": ["身份", "我是", "觉得自己", "自认", "认为自己"],
+    "relationship": ["关系", "朋友", "家人", "子女", "老伴", "夫妻", "亲子", "社交"],
+    "health": ["健康", "生病", "慢性病", "高血压", "糖尿病", "身体", "体检"],
+    "interest": ["兴趣", "爱好", "喜欢", "热爱", "特长", "业余"],
+    "current_status": ["最近", "现在", "目前", "现状", "当前", "近期"],
+    "current_focus": ["关注", "关心", "担忧", "忧虑", "操心", "担心"],
+    "emotional_trend": ["情绪", "感觉", "心情", "情绪波动", "开心", "难过"],
+    "recent_activity": ["最近活动", "做了", "参加", "去过", "这几天"],
+    "social_engagement": ["社交", "聚会", "交流", "互动", "朋友来往"]
+}
 
 
 class UserMemoryManager:
@@ -147,6 +166,11 @@ class UserMemoryManager:
             logger.info("SnowNLP情感分析库加载成功")
         except ImportError:
             logger.warning("SnowNLP未安装，将使用简易情感词典进行情感分析")
+
+        # 缓冲区：里程碑候选
+        self.milestone_buffer: Dict[str, List[Dict]] = {}  # key: user_id, value: list of memory dicts
+        # 缓冲区：语义候选，三层结构：user_id -> category -> list of memory dicts
+        self.semantic_buffer: Dict[str, Dict[str, List[Dict]]] = {}
 
     # ---------- 情感分析 ----------
     def _analyze_emotion(self, text: str) -> float:
@@ -389,7 +413,7 @@ AI回答：{answer}
     def write_memory(self, user_id: str, memory_text: str) -> bool:
         """
         将短期记忆写入user_memory集合，使用升级后的结构
-        写入后检查容量，必要时触发容量管理
+        写入后检查容量，必要时触发容量管理，并根据条件将记忆加入缓冲区
         """
         if not memory_text or not user_id:
             logger.warning(f"记忆写入失败: memory_text为空或user_id为空")
@@ -434,6 +458,9 @@ AI回答：{answer}
                 logger.info(f"短期记忆写入成功: user_id={user_id}, importance={importance}, emotion={emotion_score}")
                 # 写入后检查容量，触发管理
                 self._manage_short_term_capacity(user_id)
+
+                # 将记忆加入候选缓冲区
+                self._add_to_buffers(user_id, memory_id, memory_text, memory_embedding, memory_doc, importance, emotion_score)
             else:
                 logger.error(f"短期记忆写入失败: user_id={user_id}")
             self.clean_expired_memory(user_id)
@@ -443,6 +470,140 @@ AI回答：{answer}
             import traceback
             logger.error(traceback.format_exc())
             return False
+
+    def _add_to_buffers(self, user_id: str, mem_id: str, content: str, embedding: list, doc: dict, importance: float, emotion_score: float):
+        """
+        将记忆加入里程碑和语义候选缓冲区（如果满足条件）
+        """
+        mem_obj = {
+            "id": mem_id,
+            "content": content,
+            "metadata": doc,
+            "embedding": embedding
+        }
+
+        # 里程碑候选：重要性高或情感极端
+        if importance >= 0.7 or emotion_score <= 0.3 or emotion_score >= 0.8:
+            if user_id not in self.milestone_buffer:
+                self.milestone_buffer[user_id] = []
+            self.milestone_buffer[user_id].append(mem_obj)
+            logger.debug(f"记忆 {mem_id} 加入里程碑缓冲区，当前大小: {len(self.milestone_buffer[user_id])}")
+            # 检查是否达到阈值
+            if len(self.milestone_buffer[user_id]) >= MILESTONE_BUFFER_THRESHOLD:
+                self._process_milestone_buffer(user_id)
+
+        # 语义候选：通过关键词匹配类别
+        matched_categories = self._match_semantic_categories(content)
+        for category in matched_categories:
+            # 确定是稳定还是动态
+            if category in STABLE_SEMANTIC_CATEGORIES:
+                is_stable = True
+            elif category in DYNAMIC_SEMANTIC_CATEGORIES:
+                is_stable = False
+            else:
+                continue  # 未知类别
+
+            # 初始化用户语义缓冲区
+            if user_id not in self.semantic_buffer:
+                self.semantic_buffer[user_id] = {}
+            if category not in self.semantic_buffer[user_id]:
+                self.semantic_buffer[user_id][category] = []
+
+            # 加入缓冲区
+            self.semantic_buffer[user_id][category].append(mem_obj)
+            logger.debug(f"记忆 {mem_id} 加入语义缓冲区 类别 {category}，当前大小: {len(self.semantic_buffer[user_id][category])}")
+
+            # 检查是否达到阈值
+            if len(self.semantic_buffer[user_id][category]) >= SEMANTIC_BUFFER_THRESHOLD:
+                self._process_semantic_buffer(user_id, category, is_stable)
+
+    def _match_semantic_categories(self, text: str) -> List[str]:
+        """
+        根据关键词匹配，返回可能的语义类别列表
+        """
+        matched = []
+        for category, keywords in SEMANTIC_KEYWORDS.items():
+            if any(kw in text for kw in keywords):
+                matched.append(category)
+        return matched
+
+    def _process_milestone_buffer(self, user_id: str):
+        """处理里程碑缓冲区，调用 find_milestone 批量提取"""
+        if user_id not in self.milestone_buffer or not self.milestone_buffer[user_id]:
+            return
+        mem_list = self.milestone_buffer[user_id]
+        logger.info(f"处理用户 {user_id} 的里程碑缓冲区，共 {len(mem_list)} 条记忆")
+        try:
+            # 调用 find_milestone，传入 memory_list
+            count = self.find_milestone(user_id, memory_list=mem_list)
+            logger.info(f"里程碑提取完成，新增 {count} 条")
+        except Exception as e:
+            logger.error(f"处理里程碑缓冲区失败: {e}")
+        finally:
+            # 清空缓冲区
+            self.milestone_buffer[user_id] = []
+
+    def _process_semantic_buffer(self, user_id: str, category: str, is_stable: bool):
+        """处理语义缓冲区，将多条记忆综合后调用 find_semantic 更新"""
+        if user_id not in self.semantic_buffer or category not in self.semantic_buffer[user_id]:
+            return
+        mem_list = self.semantic_buffer[user_id][category]
+        if not mem_list:
+            return
+        logger.info(f"处理用户 {user_id} 的语义缓冲区 类别 {category}，共 {len(mem_list)} 条记忆")
+
+        try:
+            # 将多条记忆综合成一条描述
+            combined_text = self._combine_memories_for_semantic(mem_list, category, is_stable)
+            if not combined_text:
+                logger.warning("综合语义描述为空，跳过更新")
+                return
+
+            # 调用 find_semantic 更新
+            success = self.find_semantic(user_id, combined_text, category, is_stable)
+            if success:
+                logger.info(f"语义记忆更新成功: user_id={user_id}, category={category}")
+            else:
+                logger.error(f"语义记忆更新失败: user_id={user_id}, category={category}")
+        except Exception as e:
+            logger.error(f"处理语义缓冲区失败: {e}")
+        finally:
+            # 清空该类别缓冲区
+            self.semantic_buffer[user_id][category] = []
+
+    def _combine_memories_for_semantic(self, mem_list: List[Dict], category: str, is_stable: bool) -> str:
+        """
+        调用LLM将多条记忆综合成一条语义描述
+        """
+        contents = [mem["content"] for mem in mem_list]
+        combined_input = "\n".join([f"{i+1}. {c}" for i, c in enumerate(contents)])
+
+        if is_stable:
+            instruction = "请根据以下多条关于用户稳定特征的信息，综合生成一条简洁的描述，反映用户的长期稳定特点。"
+        else:
+            instruction = "请根据以下多条关于用户当前状态的信息，综合生成一条简洁的描述，反映用户近期的动态情况。"
+
+        system_prompt = f"""你是一位专业的老年心理健康助手，负责维护用户画像中的语义记忆。
+{instruction}
+
+语义类别：{category}
+
+要求：
+1. 综合多条信息，生成一条概括性描述，控制在100字以内。
+2. 不要添加额外解释，直接返回描述文本。
+"""
+        user_prompt = f"信息列表：\n{combined_input}\n\n综合描述："
+
+        try:
+            response = self._call_llm_api(system_prompt, user_prompt)
+            response = response.strip()
+            if len(response) > 200:
+                response = response[:200] + "..."
+            return response
+        except Exception as e:
+            logger.error(f"综合语义描述失败: {e}")
+            # 降级：返回第一条记忆
+            return contents[0] if contents else ""
 
     # ---------- 短期记忆检索 ----------
     def retrieve_memory(self, user_id: str, query_text: str, top_k: int = MEMORY_TOP_K) -> List[Dict[str, Any]]:
@@ -550,11 +711,7 @@ AI回答：{answer}
         deleted_count = 0
         try:
             expire_timestamp = int(time.time()) - (MEMORY_EXPIRE_DAYS * 86400)
-            where_filter = {
-                "$and": [
-                    {"user_id": {"$eq": user_id}}
-                ]
-            } if user_id else None
+            where_filter = {"user_id": user_id} if user_id else None
             all_docs = self.memory_vector_store.collection.get(
                 where=where_filter,
                 limit=1000
@@ -1186,12 +1343,10 @@ AI回答：{answer}
             logger.error(f"删除最旧里程碑失败: {e}")
 
     # ---------- 里程碑记忆检索 ----------
-    # ---------- 里程碑记忆检索 ----------
     def retrieve_milestone(self, user_id: str, query_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
         """
         检索指定用户的里程碑记忆（完全参照成功的 retrieve_semantic 写法）
         """
-        # 完全和 retrieve_semantic 一样的条件构造
         conditions = [
             {"user_id": {"$eq": user_id}},
             {"memory_type": {"$eq": "milestone"}}
@@ -1202,7 +1357,6 @@ AI回答：{answer}
         }
 
         try:
-            # 关键：使用和语义记忆完全一样的 .get() 方法（这个100%成功）
             docs = self.milestone_vector_store.collection.get(
                 where=where,
                 limit=top_k * 2  # 多取一点用于排序
@@ -1237,6 +1391,7 @@ AI回答：{answer}
             import traceback
             logger.error(traceback.format_exc())
             return []
+
     # ---------- 里程碑记忆统计 ----------
     def get_milestone_stats(self, user_id: str) -> Dict[str, Any]:
         """获取指定用户的里程碑记忆统计信息"""

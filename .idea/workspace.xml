@@ -4,9 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="31393808-0a7e-4ec7-bda4-113a16259322" name="更改" comment="做了点解释">
+    <list default="true" id="31393808-0a7e-4ec7-bda4-113a16259322" name="更改" comment="三层记忆跑通，但是筛选机制需要学习和完善，（写不进其他二层）">
+      <change afterPath="$PROJECT_DIR$/img.png" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/app/qa_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/app/qa_interface.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ingestion/memory_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/ingestion/memory_manager.py" afterDir="false" />
     </list>
@@ -132,7 +133,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773242393078</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="三层记忆跑通，但是筛选机制需要学习和完善，（写不进其他二层）">
+      <option name="closed" value="true" />
+      <created>1773767502159</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1773767502159</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
@@ -141,6 +150,7 @@
     <MESSAGE value="自行修改start" />
     <MESSAGE value="能跑通" />
     <MESSAGE value="做了点解释" />
-    <option name="LAST_COMMIT_MESSAGE" value="做了点解释" />
+    <MESSAGE value="三层记忆跑通，但是筛选机制需要学习和完善，（写不进其他二层）" />
+    <option name="LAST_COMMIT_MESSAGE" value="三层记忆跑通，但是筛选机制需要学习和完善，（写不进其他二层）" />
   </component>
 </project>

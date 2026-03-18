@@ -131,16 +131,15 @@ class QAInterface:
                 milestone_memories = self.memory_manager.retrieve_milestone(
                     user_id=user_id,
                     query_text=question,
-                    top_k=2  # 里程碑通常少量即可
+                    top_k=2
                 )
                 logger.info(f"检索到用户[{user_id}]的里程碑记忆数量: {len(milestone_memories)}")
             except Exception as e:
                 logger.error(f"里程碑记忆检索失败: {e}")
 
-            # 语义记忆检索（全部返回，因为数量少且重要）
+            # 语义记忆检索（全部返回）
             try:
                 semantic_list = self.memory_manager.retrieve_semantic(user_id=user_id)
-                # 格式化，保持与短期记忆一致的结构
                 for sem in semantic_list:
                     semantic_memories.append({
                         'content': sem['content'],
@@ -153,6 +152,24 @@ class QAInterface:
             except Exception as e:
                 logger.error(f"语义记忆检索失败: {e}")
 
+        # ===== 获取用户画像统计信息（新增） =====
+        profile_text = ""
+        if self.memory_manager:
+            try:
+                milestone_stats = self.memory_manager.get_milestone_stats(user_id)
+                semantic_stats = self.memory_manager.get_semantic_stats(user_id)
+                profile_parts = []
+                if milestone_stats.get('total_milestone', 0) > 0:
+                    types_str = ', '.join([f"{k}:{v}" for k, v in milestone_stats['types'].items()])
+                    profile_parts.append(f"里程碑记忆分布：{types_str}")
+                if semantic_stats.get('total_semantic', 0) > 0:
+                    profile_parts.append(
+                        f"语义记忆总数：{semantic_stats['total_semantic']}（稳定{semantic_stats['stable_count']}，动态{semantic_stats['dynamic_count']}）")
+                if profile_parts:
+                    profile_text = "【用户整体画像】\n" + "\n".join(profile_parts)
+            except Exception as e:
+                logger.error(f"获取用户画像统计失败: {e}")
+
         # 2. 检索相关知识
         docs = self.searcher.search(
             query=question,
@@ -162,25 +179,25 @@ class QAInterface:
         )
         logger.info(f"检索到 {len(docs)} 条相关文档")
 
-        # 如果知识库没有相关文档，但仍有记忆，仍可生成回答
         # ===== 构建多层次上下文 =====
         context_parts = []
 
-        # 语义记忆（最稳定，放在最前）
+        # 新增：整体画像放在最前面
+        if profile_text:
+            context_parts.append(profile_text)
+
+        # 语义记忆（最稳定）
         if semantic_memories:
-            sem_lines = []
-            for sem in semantic_memories:
-                sem_lines.append(f"- {sem['content']} (类型: {sem['category']})")
+            sem_lines = [f"- {sem['content']} (类型: {sem['category']})" for sem in semantic_memories]
             context_parts.append("【用户基本特征】\n" + "\n".join(sem_lines))
 
         # 里程碑记忆
         if milestone_memories:
-            mile_lines = []
-            for mile in milestone_memories:
-                mile_lines.append(f"- {mile['content']} (类型: {mile.get('milestone_type', 'other')})")
+            mile_lines = [f"- {mile['content']} (类型: {mile.get('milestone_type', 'other')})" for mile in
+                          milestone_memories]
             context_parts.append("【用户人生里程碑】\n" + "\n".join(mile_lines))
 
-        # 短期记忆（最近的）
+        # 短期记忆
         if short_term_memories:
             short_lines = [f"- {m['content']}" for m in short_term_memories]
             context_parts.append("【用户近期相关事件】\n" + "\n".join(short_lines))
