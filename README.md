@@ -79,3 +79,9 @@
    ```bash
    python src/app/main.py --port 8000
 
+## demo展示
+
+1. 直接接入API，写一个简单的可视化就行，只是注意API返回数据的格式要与前端解析匹配（可在API 文档：http://localhost:8000/docs 下查看）
+2. demo.html向我们展示了一个例子，可以参考
+![img_1.png](img_1.png)
+![img_2.png](img_2.png)
