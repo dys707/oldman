@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>demo</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            background: linear-gradient(145deg, #eef5ff 0%, #e0eaff 100%);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Noto Sans', sans-serif;
+            overflow: hidden;
+        }
+
+        /* 主容器 */
+        #app {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            backdrop-filter: blur(2px);
+            padding: 16px;
+            gap: 16px;
+        }
+
+        /* ========= 左侧面板：记忆圣殿 ========= */
+        .sidebar {
+            width: 380px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            border-radius: 32px;
+            border: 1px solid rgba(99, 179, 237, 0.4);
+            box-shadow: 0 20px 35px -12px rgba(0, 40, 80, 0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        /* 用户区 */
+        .user-section {
+            background: rgba(255, 255, 255, 0.7);
+            margin: 20px 20px 12px 20px;
+            padding: 16px 18px;
+            border-radius: 28px;
+            border: 1px solid #cde3fc;
+            box-shadow: 0 2px 6px rgba(0, 68, 128, 0.04);
+        }
+
+        .user-section h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #1e4b7a;
+            letter-spacing: 0.3px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #currentUserDisplay {
+            background: #e6f2ff;
+            padding: 5px 12px;
+            border-radius: 40px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #0a5c9e;
+            border: 1px solid #bddcff;
+            display: inline-block;
+        }
+
+        .user-input-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        #userIdInput {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #cce3ff;
+            border-radius: 48px;
+            font-size: 0.9rem;
+            background: white;
+            transition: 0.2s;
+            outline: none;
+            font-weight: 500;
+            color: #1a4c7a;
+        }
+
+        #userIdInput:focus {
+            border-color: #3b8ee7;
+            box-shadow: 0 0 0 3px rgba(59, 142, 231, 0.2);
+        }
+
+        #setUserBtn {
+            background: linear-gradient(105deg, #2c7ed6, #1a6bbf);
+            border: none;
+            border-radius: 48px;
+            padding: 0 22px;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 8px rgba(0, 95, 150, 0.1);
+        }
+
+        #setUserBtn:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(105deg, #1f6abe, #115a9e);
+            box-shadow: 0 8px 16px rgba(0, 90, 140, 0.2);
+        }
+
+        /* Tab 栏 */
+        .tab-bar {
+            display: flex;
+            gap: 8px;
+            margin: 8px 20px 12px 20px;
+            background: #f0f6fe;
+            padding: 4px;
+            border-radius: 60px;
+        }
+
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 8px 0;
+            font-size: 0.85rem;
+            font-weight: 550;
+            border: none;
+            background: transparent;
+            border-radius: 40px;
+            cursor: pointer;
+            color: #3a6e9f;
+            transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+        }
+
+        .tab.active {
+            background: white;
+            color: #1f6dc6;
+            box-shadow: 0 2px 8px rgba(0, 70, 120, 0.08);
+            font-weight: 600;
+        }
+
+        /* 图形容器 + 记忆列表 */
+        .memory-visual-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0 20px 20px 20px;
+            gap: 18px;
+        }
+
+        /* 小型图表卡片 */
+        .chart-card {
+            background: rgba(255, 255, 255, 0.75);
+            border-radius: 28px;
+            padding: 12px 12px 8px 12px;
+            border: 1px solid rgba(72, 156, 239, 0.3);
+            backdrop-filter: blur(4px);
+            transition: all 0.2s;
+        }
+
+        .chart-title {
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #3874a3;
+            margin-bottom: 10px;
+            padding-left: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 120px;
+            display: block;
+            background: #fefefd;
+            border-radius: 24px;
+            padding: 6px;
+        }
+
+        .memories-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding: 0 4px;
+            margin-bottom: 12px;
+        }
+
+        .memories-header h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #215f8a;
+        }
+
+        #refreshMemoriesBtn {
+            background: #eaf3ff;
+            border: 1px solid #bdd9ff;
+            border-radius: 32px;
+            padding: 6px 14px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #1c6fb0;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        #refreshMemoriesBtn:hover:not(:disabled) {
+            background: #d4e6ff;
+            transform: scale(0.96);
+        }
+
+        /* 记忆列表 —— 时间轴样式 */
+        .memories-list {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        /* 时间轴卡片 */
+        .memory-item {
+            display: flex;
+            gap: 14px;
+            background: white;
+            border-radius: 24px;
+            padding: 14px 16px;
+            border: 1px solid #d7e8ff;
+            box-shadow: 0 6px 12px -8px rgba(0, 32, 64, 0.08);
+            transition: all 0.3s ease;
+            animation: fadeSlideUp 0.35s ease backwards;
+            position: relative;
+        }
+
+        .memory-item:hover {
+            transform: translateX(5px) translateY(-3px);
+            border-color: #8bbcf0;
+            box-shadow: 0 14px 22px -12px rgba(35, 110, 170, 0.2);
+        }
+
+        /* 时间轴左侧视觉元素 */
+        .timeline-left {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 52px;
+            flex-shrink: 0;
+        }
+
+        .timeline-dot {
+            width: 12px;
+            height: 12px;
+            background: #3f8fd9;
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px rgba(63, 143, 217, 0.2);
+            margin-top: 6px;
+        }
+
+        .timeline-date {
+            font-size: 0.65rem;
+            font-weight: 500;
+            color: #5a7b9c;
+            background: #ecf5fd;
+            padding: 3px 8px;
+            border-radius: 40px;
+            margin-top: 8px;
+            white-space: nowrap;
+        }
+
+        .memory-content-wrapper {
+            flex: 1;
+        }
+
+        .memory-content {
+            font-size: 0.88rem;
+            line-height: 1.4;
+            color: #1f3b54;
+            margin-bottom: 8px;
+            font-weight: 500;
+            word-break: break-word;
+        }
+
+        .memory-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 0.7rem;
+            color: #5680a5;
+            align-items: center;
+        }
+
+        .memory-importance {
+            background: #fef6e0;
+            padding: 2px 8px;
+            border-radius: 20px;
+            color: #c2840c;
+            font-weight: 600;
+        }
+
+        /* 右侧聊天区 */
+        .chat-area {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            border-radius: 32px;
+            border: 1px solid rgba(99, 179, 237, 0.4);
+            box-shadow: 0 20px 35px -12px rgba(0, 40, 80, 0.12);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 12px 20px;
+            border-radius: 32px;
+            line-height: 1.5;
+            font-size: 0.95rem;
+            animation: messagePop 0.25s ease-out;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+        }
+
+        .user-message {
+            align-self: flex-end;
+            background: linear-gradient(115deg, #2c7fd8, #196fc2);
+            color: white;
+            border-bottom-right-radius: 6px;
+        }
+
+        .assistant-message {
+            align-self: flex-start;
+            background: white;
+            border: 1px solid #cde2fc;
+            border-bottom-left-radius: 6px;
+            color: #1b405e;
+        }
+
+        .sources {
+            margin-top: 12px;
+            background: #f2f9ff;
+            border-radius: 18px;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            border-left: 3px solid #2c7ed6;
+        }
+
+        .sources summary {
+            font-weight: 600;
+            cursor: pointer;
+            color: #1f6bb0;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 12px;
+            padding: 18px 22px;
+            background: rgba(255, 255, 255, 0.7);
+            border-top: 1px solid rgba(110, 178, 240, 0.3);
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 14px 22px;
+            border: 1px solid #c9e0ff;
+            border-radius: 60px;
+            font-size: 0.95rem;
+            background: white;
+            transition: 0.2s;
+            outline: none;
+        }
+
+        #messageInput:focus {
+            border-color: #3b8ee7;
+            box-shadow: 0 0 0 3px rgba(59, 142, 231, 0.2);
+        }
+
+        #sendBtn {
+            background: linear-gradient(115deg, #2c7fd8, #1a6bbf);
+            border: none;
+            padding: 0 28px;
+            border-radius: 60px;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 4px 10px rgba(0, 80, 130, 0.1);
+        }
+
+        #sendBtn:hover:not(:disabled) {
+            transform: scale(0.96);
+            background: linear-gradient(115deg, #226ec2, #135fa8);
+        }
+
+        .placeholder {
+            color: #88a9ce;
+            text-align: center;
+            padding: 32px 20px;
+            font-style: italic;
+            font-weight: 400;
+        }
+
+        .error-text {
+            color: #c55a5a;
+            background: #ffeaea;
+            padding: 12px;
+            border-radius: 24px;
+            font-size: 0.8rem;
+        }
+
+        /* 动画定义 */
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes messagePop {
+            0% {
+                opacity: 0;
+                transform: scale(0.96);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #e4edf6;
+            border-radius: 8px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #9bc0e2;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <!-- 左侧记忆区 -->
+    <div class="sidebar">
+        <div class="user-section">
+            <h3>🧘 用户ID</h3>
+            <div style="margin-bottom: 8px;">
+                <span id="currentUserDisplay" style="font-size:0.85rem;">未设置</span>
+            </div>
+            <div class="user-input-group">
+                <input type="text" id="userIdInput" placeholder="你的名字 / ID" value="旅人小蓝">
+                <button id="setUserBtn">✨ 查询记忆</button>
+            </div>
+        </div>
+
+        <div class="tab-bar">
+            <button class="tab active" data-type="short">🌿 短期记忆</button>
+            <button class="tab" data-type="milestone">🏆 里程碑</button>
+            <button class="tab" data-type="semantic">📚 语义记忆</button>
+        </div>
+
+        <div class="memory-visual-area">
+            <!-- 记忆趋势图形区域 -->
+            <div class="chart-card" id="chartCard">
+                <div class="chart-title">
+                    <span>📈 记忆重要度 · 时间韵律</span>
+                </div>
+                <canvas id="memoryChart" width="400" height="120" style="width:100%; height:120px;"></canvas>
+                <div id="chartHint" style="font-size:0.65rem; color:#7094b8; text-align:center; margin-top:6px;"></div>
+            </div>
+
+            <div class="memories-header">
+                <h3>📜 记忆溪流 · 时间轴</h3>
+                <button id="refreshMemoriesBtn" disabled>🔄 漾起涟漪</button>
+            </div>
+            <div id="memoriesList" class="memories-list">
+                <div class="placeholder">💙 轻触「开启记忆」建立连结</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧对话区 -->
+    <div class="chat-area">
+        <div id="chatMessages" class="chat-messages">
+            <div class="placeholder">✨ 记忆轻舟已待，在此诉说心声吧</div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="和你的AI记忆助手聊聊..." disabled>
+            <button id="sendBtn" disabled>✈️ 寄出</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        // API配置 (与后端一致)
+        const API_BASE = "http://localhost:8000";
+        let currentUser = null;
+        let activeTab = "short";
+        let currentMemoriesData = [];   // 存储当前tab的记忆列表，用于绘图
+
+        // DOM 元素
+        const userIdInput = document.getElementById('userIdInput');
+        const setUserBtn = document.getElementById('setUserBtn');
+        const currentUserSpan = document.getElementById('currentUserDisplay');
+        const refreshMemoriesBtn = document.getElementById('refreshMemoriesBtn');
+        const memoriesListDiv = document.getElementById('memoriesList');
+        const chatMessagesDiv = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const tabs = document.querySelectorAll('.tab');
+        const memoryChartCanvas = document.getElementById('memoryChart');
+        const chartHint = document.getElementById('chartHint');
+        let ctx = memoryChartCanvas.getContext('2d');
+
+        // 控制禁用/启用状态
+        function setControlsDisabled(disabled) {
+            messageInput.disabled = disabled || !currentUser;
+            sendBtn.disabled = disabled || !currentUser;
+            refreshMemoriesBtn.disabled = disabled || !currentUser;
+        }
+
+        // 清空聊天 (保留温柔占位)
+        function clearChat() {
+            chatMessagesDiv.innerHTML = '<div class="placeholder">💭 新的记忆旅程开始，问任何问题吧～</div>';
+        }
+
+        // 添加消息（带小动画）
+        function appendMessage(role, content, sources = null) {
+            if (chatMessagesDiv.children.length === 1 && chatMessagesDiv.children[0].classList.contains('placeholder')) {
+                chatMessagesDiv.innerHTML = '';
+            }
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role === 'user' ? 'user-message' : 'assistant-message'}`;
+            const contentP = document.createElement('div');
+            contentP.textContent = content;
+            msgDiv.appendChild(contentP);
+
+            if (role === 'assistant' && sources && Array.isArray(sources) && sources.length > 0) {
+                const details = document.createElement('details');
+                details.className = 'sources';
+                const summary = document.createElement('summary');
+                summary.textContent = `📎 心流来源`;
+                details.appendChild(summary);
+                const ul = document.createElement('ul');
+                sources.forEach(src => {
+                    const li = document.createElement('li');
+                    li.textContent = src.content || src.text || JSON.stringify(src);
+                    ul.appendChild(li);
+                });
+                details.appendChild(ul);
+                msgDiv.appendChild(details);
+            }
+            chatMessagesDiv.appendChild(msgDiv);
+            chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+        }
+
+        // 绘制重要度趋势图 (时间轴图形)
+        function drawImportanceChart(memories, tabType) {
+            if (!ctx || !memoryChartCanvas) return;
+            if (!memories || memories.length === 0) {
+                ctx.clearRect(0, 0, memoryChartCanvas.width, memoryChartCanvas.height);
+                chartHint.innerText = '🌸 暂无记忆数据，对话后将出现时间韵律';
+                return;
+            }
+
+            // 过滤出带有 importance 和 timestamp 的记忆
+            let validPoints = memories.filter(m => (m.importance !== undefined && m.timestamp) && typeof m.importance === 'number');
+            if (validPoints.length === 0 && tabType !== 'semantic') {
+                ctx.clearRect(0, 0, memoryChartCanvas.width, memoryChartCanvas.height);
+                chartHint.innerText = '✨ 重要度数据随对话生长，多聊几句吧';
+                return;
+            }
+            if (validPoints.length === 0 && tabType === 'semantic') {
+                ctx.clearRect(0, 0, memoryChartCanvas.width, memoryChartCanvas.height);
+                chartHint.innerText = '📖 语义记忆沉淀智慧，重要度可视化将逐步浮现';
+                return;
+            }
+
+            // 按时间戳排序（升序）
+            validPoints.sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+            const values = validPoints.map(p => Math.min(1.0, Math.max(0, p.importance))); // 限制0-1
+            const timestamps = validPoints.map(p => {
+                let d = new Date(p.timestamp);
+                return `${d.getMonth()+1}/${d.getDate()}`;
+            });
+
+            const w = memoryChartCanvas.clientWidth;
+            const h = memoryChartCanvas.clientHeight;
+            memoryChartCanvas.width = w;
+            memoryChartCanvas.height = h;
+            ctx.clearRect(0, 0, w, h);
+            if (values.length === 0) return;
+
+            const padding = { left: 35, right: 20, top: 15, bottom: 25 };
+            const graphW = w - padding.left - padding.right;
+            const graphH = h - padding.top - padding.bottom;
+            if (graphW <= 0 || graphH <= 0) return;
+
+            const maxVal = Math.max(...values, 0.2);
+            const minVal = Math.min(...values, 0);
+            const yScale = (val) => padding.top + graphH * (1 - (val - minVal) / (maxVal - minVal || 1));
+
+            // 绘制柔和网格
+            ctx.beginPath();
+            ctx.strokeStyle = "#bfd9ff";
+            ctx.lineWidth = 0.8;
+            for (let i = 0; i <= 4; i++) {
+                let y = padding.top + (i * graphH / 4);
+                ctx.beginPath();
+                ctx.moveTo(padding.left, y);
+                ctx.lineTo(padding.left + graphW, y);
+                ctx.stroke();
+            }
+
+            // 折线
+            ctx.beginPath();
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = "#2c7ed6";
+            ctx.fillStyle = "rgba(44, 126, 214, 0.08)";
+            let step = graphW / (values.length - 1 || 1);
+            let firstX = padding.left;
+            ctx.moveTo(firstX, yScale(values[0]));
+            for (let i = 1; i < values.length; i++) {
+                let x = padding.left + i * step;
+                ctx.lineTo(x, yScale(values[i]));
+            }
+            ctx.stroke();
+
+            // 填充渐变
+            ctx.lineTo(padding.left + (values.length-1)*step, padding.top + graphH);
+            ctx.lineTo(padding.left, padding.top + graphH);
+            ctx.closePath();
+            ctx.fillStyle = "rgba(86, 164, 237, 0.1)";
+            ctx.fill();
+
+            // 绘制数据点 + 小圆动画
+            for (let i = 0; i < values.length; i++) {
+                let x = padding.left + i * step;
+                let y = yScale(values[i]);
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = "#ffffff";
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fillStyle = "#1f6dc6";
+                ctx.fill();
+            }
+
+            // X轴标签 (最多显示5个)
+            ctx.font = "10px 'Inter'";
+            ctx.fillStyle = "#5282b0";
+            for (let i = 0; i < timestamps.length; i++) {
+                if (i % Math.ceil(timestamps.length / 5) === 0 || i === timestamps.length-1) {
+                    let x = padding.left + i * step;
+                    ctx.fillText(timestamps[i], x-12, padding.top + graphH + 15);
+                }
+            }
+            ctx.fillStyle = "#3f7ea3";
+            ctx.fillText("重要度 →", 5, padding.top-5);
+            chartHint.innerText = `📊 共 ${values.length} 条记忆 · 时间轴重要度曲线 (越高越深刻)`;
+        }
+
+        // 渲染记忆列表（时间轴样式）
+        function renderMemoriesList(list, tabType) {
+            if (!list || list.length === 0) {
+                memoriesListDiv.innerHTML = '<div class="placeholder">🧘 暂无记忆，和AI对话将沉淀回忆～</div>';
+                return;
+            }
+
+            memoriesListDiv.innerHTML = list.map((m, idx) => {
+                const content = m.content || JSON.stringify(m);
+                let timestampRaw = m.timestamp || m.updated_at || null;
+                let timeStr = '';
+                if (timestampRaw) {
+                    let date = new Date(timestampRaw);
+                    timeStr = `${date.getMonth()+1}/${date.getDate()} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+                } else {
+                    timeStr = '此刻涟漪';
+                }
+                const importanceVal = (m.importance !== undefined && m.importance !== null) ? parseFloat(m.importance).toFixed(2) : null;
+
+                let metaHtml = '';
+                if (tabType === 'short') {
+                    const similarity = (m.similarity || 0).toFixed(3);
+                    metaHtml = `<span>✨ 相似度 ${similarity}</span>`;
+                    if (importanceVal) metaHtml += `<span class="memory-importance">🔮 重要度 ${importanceVal}</span>`;
+                } else if (tabType === 'milestone') {
+                    const mtype = m.milestone_type || '🌟 高光';
+                    metaHtml = `<span>🏅 ${mtype}</span>`;
+                    if (importanceVal) metaHtml += `<span class="memory-importance">⭐ 重要度 ${importanceVal}</span>`;
+                } else {
+                    const category = m.category || '📘 知识片段';
+                    metaHtml = `<span>${category}</span>`;
+                    if (importanceVal) metaHtml += `<span class="memory-importance">📌 重要度 ${importanceVal}</span>`;
+                }
+
+                return `
+                    <div class="memory-item" style="animation-delay: ${idx * 0.03}s">
+                        <div class="timeline-left">
+                            <div class="timeline-dot"></div>
+                            <div class="timeline-date">${timeStr}</div>
+                        </div>
+                        <div class="memory-content-wrapper">
+                            <div class="memory-content">${escapeHtml(content)}</div>
+                            <div class="memory-meta">${metaHtml}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 简单防XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+                return c;
+            });
+        }
+
+        // 加载记忆（适配短期/里程碑/语义）
+        async function loadMemories() {
+            if (!currentUser) {
+                memoriesListDiv.innerHTML = '<div class="placeholder">💙 请先设置你的灵境ID</div>';
+                if(ctx) ctx.clearRect(0,0,memoryChartCanvas.width,memoryChartCanvas.height);
+                chartHint.innerText = '🌸 设置用户后，记忆图形将浮现';
+                return;
+            }
+            memoriesListDiv.innerHTML = '<div class="placeholder">🌊 引动记忆溪流...</div>';
+            try {
+                let url;
+                if (activeTab === "short") {
+                    url = `${API_BASE}/api/rag/short_term_memories?user_id=${encodeURIComponent(currentUser)}&limit=20`;
+                } else if (activeTab === "milestone") {
+                    url = `${API_BASE}/api/rag/milestone_memories?user_id=${encodeURIComponent(currentUser)}&limit=20`;
+                } else {
+                    url = `${API_BASE}/api/rag/semantic_memories?user_id=${encodeURIComponent(currentUser)}`;
+                }
+
+                const res = await fetch(url);
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.msg || "获取失败");
+
+                const data = result.data;
+                let list = [];
+                if (activeTab === "semantic") {
+                    list = data.semantic_memories || [];
+                } else if (activeTab === "short") {
+                    list = data.short_term_memories || [];
+                } else if (activeTab === "milestone") {
+                    list = data.milestone_memories || [];
+                }
+                currentMemoriesData = list;
+                renderMemoriesList(list, activeTab);
+                // 绘制图形
+                drawImportanceChart(list, activeTab);
+            } catch (e) {
+                console.error("记忆加载错误", e);
+                memoriesListDiv.innerHTML = `<div class="error-text">⛅ 记忆微风暂歇：${e.message}</div>`;
+                if(ctx) ctx.clearRect(0,0,memoryChartCanvas.width,memoryChartCanvas.height);
+                chartHint.innerText = '🌀 连接记忆之森遇到轻雾，稍后再试';
+            }
+        }
+
+        // 发送消息 + 重新加载记忆
+        async function sendMessage() {
+            const q = messageInput.value.trim();
+            if (!q || !currentUser) return;
+            appendMessage('user', q);
+            messageInput.value = '';
+            setControlsDisabled(true);
+
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'message assistant-message';
+            loadingDiv.textContent = '🌿 正在编织记忆丝线 ...';
+            chatMessagesDiv.appendChild(loadingDiv);
+            chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/rag/answer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: currentUser,
+                        question: q,
+                        return_sources: true
+                    })
+                });
+                loadingDiv.remove();
+                const data = await resp.json();
+                appendMessage('assistant', data.answer || '灵境回响无声', data.sources);
+                await loadMemories();  // 刷新记忆面板及图表
+            } catch (e) {
+                loadingDiv.remove();
+                appendMessage('assistant', `✨ 灵境涟漪微荡：${e.message}`);
+            } finally {
+                setControlsDisabled(false);
+                messageInput.focus();
+            }
+        }
+
+        // 设置用户
+        function setUser() {
+            const u = userIdInput.value.trim();
+            if (!u) return alert("请留下你的灵境之名～");
+            currentUser = u;
+            currentUserSpan.textContent = currentUser;
+            clearChat();
+            setControlsDisabled(false);
+            loadMemories();
+        }
+
+        // 切换标签
+        tabs.forEach(t => {
+            t.addEventListener('click', () => {
+                tabs.forEach(x => x.classList.remove('active'));
+                t.classList.add('active');
+                activeTab = t.dataset.type;
+                loadMemories();
+            });
+        });
+
+        // 监听resize 重绘图表
+        window.addEventListener('resize', () => {
+            if (currentMemoriesData && currentUser) {
+                drawImportanceChart(currentMemoriesData, activeTab);
+            }
+        });
+
+        // 绑定事件
+        setUserBtn.addEventListener('click', setUser);
+        refreshMemoriesBtn.addEventListener('click', loadMemories);
+        sendBtn.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !sendBtn.disabled) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        setControlsDisabled(true);
+        // 初始自适应画板
+        setTimeout(() => {
+            if(memoryChartCanvas) {
+                memoryChartCanvas.width = memoryChartCanvas.clientWidth;
+                memoryChartCanvas.height = memoryChartCanvas.clientHeight;
+            }
+        }, 100);
+    })();
+</script>
+</body>
+</html>
